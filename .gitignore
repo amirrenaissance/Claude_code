@@ -1,0 +1,4 @@
+# Credentials
+.env
+.env.*
+!.env.example
