@@ -1,0 +1,45 @@
+
+Workbook: /home/user/Claude_code/tam/output/TAM_Business_Lending_2026-11-09.xlsx
+Recalc: {'status': 'success', 'total_errors': 0, 'error_summary': {}, 'total_formulas': 30625}
+
+================ TAM SUMMARY ================
+Total companies in TAM: 6,065  (excluded as out of scope: 5,887; duplicates merged: 419)
+Segments: Funder 2,984, Unknown 2,625, Hybrid 395, Broker/ISO 61
+Tiers:    Tier 3 2,886, Tier 2 1,736, Disqualified - No contacts 676, Tier 1 634, Disqualified - Out of business 104, Partner 16, Disqualified - Competitor 13
+Tier 1: 634 accounts, 631 with a decision-maker on file (626 verified)
+Contacts on tab: 12,881  | best decision-makers flagged: 8,324
+
+Top 25 prospects:
+ 1. Flexibility Capital (flexibilitycapital.com) 91.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.80 match; Size band fit: Small
+ 2. Shield Funding (shieldfunding.com) 89.8 [Funder/MCA funder/Small] - Lookalike to Partners: 0.83 match; Segment fit: Funder; Size band fit: Small
+ 3. Berkman Financial (berkmanfinancial.com) 88.0 [Funder/LOC / working capital/Small] - Lookalike to Partners: 1.00 match; Segment fit: Funder; Size band fit: Small | gaps: Engagement with us
+ 4. RFR Capital (rfrcapital.com) 88.0 [Funder/LOC / working capital/Small] - Lookalike to Partners: 1.00 match; Segment fit: Funder; Size band fit: Small | gaps: Engagement with us
+ 5. Alternative Funding Group (altfunding.com) 87.3 [Funder/MCA funder/Small] - Segment fit: Funder; Lookalike to Partners: 0.73 match; Size band fit: Small
+ 6. Fora Financial (forafinancial.com) 86.6 [Funder/LOC / working capital/Mid] - Segment fit: Funder; Lookalike to Partners: 0.72 match; Size band fit: Mid
+ 7. ByzFunder (byzfunder.com) 86.3 [Funder/Commercial lending (general)/Small] - Lookalike to Partners: 0.85 match; Segment fit: Funder; Size band fit: Small
+ 8. Lendr (lendr.online) 86.3 [Funder/MCA funder/Small] - Segment fit: Funder; Size band fit: Small; Lookalike to Partners: 0.53 match
+ 9. Premier Capital Funding (premierecapitalfunding.com) 86.3 [Funder/MCA funder/Small] - Segment fit: Funder; Lookalike to Partners: 0.73 match; Size band fit: Small
+10. Key Capital Funding (keycapitalfunding.com) 86.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.80 match; Size band fit: Small
+11. Wall Street Funding (wallfunding.com) 85.5 [Funder/LOC / working capital/Small] - Lookalike to Partners: 0.90 match; Segment fit: Funder; Size band fit: Small | gaps: Engagement with us
+12. RidgeStone Capital (ridgestonecap.com) 85.3 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.65 match; Size band fit: Small
+13. Legend Advance Funding (legendfunding.com) 85.3 [Funder/MCA funder/Small] - Segment fit: Funder; Lookalike to Partners: 0.73 match; Size band fit: Small
+14. Fintegra (getfintegra.com) 85.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.80 match; Size band fit: Small | gaps: Engagement with us
+15. Diamond Business Loans (diamondbl.com) 85.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.80 match; Size band fit: Small
+16. Lighter Capital (lightercapital.com) 84.8 [Funder/MCA funder/Small] - Segment fit: Funder; Lookalike to Partners: 0.63 match; Size band fit: Small
+17. Shore Funding Solutions (shorefundingsolutions.com) 84.1 [Funder/LOC / working capital/Mid] - Lookalike to Partners: 0.82 match; Segment fit: Funder; Size band fit: Mid | gaps: Engagement with us
+18. 4 Pillar Funding (4pillarfunding.com) 84.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Size band fit: Small; Lookalike to Partners: 0.60 match
+19. Excel Capital Management (excelcapmanagement.com) 83.8 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.75 match; Size band fit: Small | gaps: Engagement with us
+20. PIRS Capital (pirscapital.com) 83.8 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.75 match; Size band fit: Small | gaps: Engagement with us
+21. Kalamata Capital Group (kalamatacapitalgroup.com) 83.6 [Funder/MCA funder/Small] - Segment fit: Funder; Size band fit: Small; Lookalike to Partners: 0.58 match
+22. First Class (firstclassbusinessgroup.com) 83.6 [Funder/MCA funder/Small] - Segment fit: Funder; Size band fit: Small; Lookalike to Partners: 0.58 match
+23. Loot (getloot.com) 83.5 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.70 match; Size band fit: Small
+24. Sunrisefundinggrp (sunrisefundinggrp.com) 83.3 [Funder/MCA funder/Small] - Segment fit: Funder; Lookalike to Partners: 0.73 match; Size band fit: Small
+25. WeFi Technology Group (wefitec.com) 83.0 [Funder/LOC / working capital/Small] - Segment fit: Funder; Lookalike to Partners: 0.80 match; Size band fit: Small | gaps: Engagement with us
+
+Biggest data gaps:
+ - Not in Attio: 4,874 of 6,065
+ - No website profile: 3,012 of 6,065
+ - Size band Unknown: 2,657 of 6,065
+ - Segment Unknown: 2,625 of 6,065
+ - Verification not checked: 2,491 of 6,065
+ - No decision-maker on file: 2,099 of 6,065

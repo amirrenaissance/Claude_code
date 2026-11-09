@@ -1,0 +1,6 @@
+# TAM: contact-level data stays out of git (PII). Code, SQL, and rules are versioned.
+tam/input/
+tam/output/
+tam/data/raw/
+tam/data/partner_contacts.csv
+__pycache__/
