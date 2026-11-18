@@ -87,7 +87,7 @@ SCALARS: list[tuple] = [
     ("in_Ramp2", "Ramp: month 2 productivity (% of target)", 0.8, "%", "GUESS", "", PCT),
     ("in_Ramp3", "Ramp: month 3+ productivity (% of target)", 1.0, "%", "CONFIRMED", "Brief", PCT),
     ("in_QualStart", "Qualified-rate basis: bookings dated on/after", dt.date(2026, 11, 1), "date", "INPUT", "Nov 1 = start of the CEO 3-question booking mandate", "yyyy-mm-dd"),
-    ("in_QualRate", "Qualified rate (booked -> qualified, billable)", "=IFERROR(COUNTIFS(act_q,1,act_date,\">=\"&in_QualStart)/COUNTIFS(act_date,\">=\"&in_QualStart),0)", "%", "ACTUAL", "Booking form: Min qualified = Yes and not a false booking", PCT),
+    ("in_QualRate", "Qualified rate (booked -> qualified, billable)", "=IFERROR(COUNTIFS(act_q,1,act_date,\">=\"&in_QualStart)/COUNTIFS(act_date,\">=\"&in_QualStart),0)", "%", "ACTUAL", "Caller QA 'Qualified' (Nov 1-15), else Scorecard Min qualified; false bookings excluded", PCT),
     ("in_UnqualBill", "Share of unqualified bookings that still bill", 0.0, "%", "CONFIRMED", "Brief: false/unqualified = unbillable. Set >0 to test partners paying per booking regardless", PCT),
     ("in_WinStart", "Actuals window start (last 60 days)", dt.date(2026, 9, 19), "date", "INPUT", "refresh_actuals.py resets this", "yyyy-mm-dd"),
     ("in_WinEnd", "Actuals window end (data through)", dt.date(2026, 11, 17), "date", "INPUT", "Scorecard 'Bookings Live' data through 2026-11-17; booking data starts 2026-10-01", "yyyy-mm-dd"),
@@ -249,6 +249,7 @@ ROSTER = [
     ("steve", "Funding", "LATAM full-time", None, None, "Y", ""),
     ("jacobo", "Funding", "LATAM full-time", None, None, "Y", "Moved Pre-IPO -> Funding Nov 4"),
     ("alejandro", "Data Broker", "LATAM full-time", 2800, 10, "Y", "Amir 11/16: $2,800 + $10/qualified held"),
+    ("oscarduran", "Funding", "LATAM full-time", None, None, "Y", "In Caller QA only (not in Scorecard data); pay type GUESSED"),
     ("pablo", "Data Broker", "Pipeline manager", None, 0, "N", "Runs the Data Broker team (manager, not a setter): excluded from setter P&L and headcount"),
     ("marwan", "Pre-IPO", "Egypt (NAC)", None, None, "N", "Terminated"),
 ] + [(n, "Funding", "LATAM full-time", None, None, "Y", "Nov 13 class; pay type GUESSED")
@@ -673,6 +674,8 @@ r += 1
 section(wsM, r, "Data sources", 2); r += 1
 for s_ in ["Bookings: booking web form (renaissance-booking.com) via Setter_Scorecard_Baseline_Oct2026 "
            "('Bookings Oct 2026 FINAL' + 'Bookings Live'), Oct 1 - Nov 17 2026, recording-verified",
+           "Billable rule: for Nov 1-15 the Caller QA grade decides (only 'Qualified' bills and earns commission; "
+           "Review is unbilled until re-listened). Other dates use the Scorecard's Min qualified flag",
            "Show rates: partner-no-show-labels-summary (Jul 1 - Nov 5 2026)",
            "Pay: 'Setter comp - current state' sheet + Slack (#ops-amir-julian); P0 volume: weekly KPI packs (#leaders)",
            "ClickHouse was not reachable from the build environment; refresh_actuals.py can pull from it once access is set up"]:
