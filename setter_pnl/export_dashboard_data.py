@@ -58,6 +58,15 @@ k = {
     "win_rev": S["Team revenue in window (billable bookings x price)"],
     "win_cost": S["Team cost in window"],
     "win_cm": S["Team contribution margin in window"],
+    "win_pct": S["Contribution margin % in window (qualified only billed)"],
+    "win_rev_all": S["Team revenue in window (all billed)"],
+    "win_cm_all": S["Team contribution margin in window (all billed)"],
+    "win_pct_all": S["Contribution margin % in window (all billed)"],
+    "win_profitable_all": S["Setters with positive CM (all billed)"],
+    "be_booked_day_all": S["Break-even BOOKED meetings / day, roster mix (all billed)"],
+    "team_cm_now_all": S["Team CM / month, current team, P0 only (all billed)"],
+    "delta12_p0_all": S["Change in CM from adding 12 setters, P0 only (all billed)"],
+    "delta12_cold_all": S["Change in CM from adding 12 setters, with cold lane (all billed)"],
     "target_q_day": inp["Target qualified meetings per setter per day (OTE)"],
     "win_start": str(inp["Actuals window start (last 60 days)"])[:10],
     "win_end": str(inp["Actuals window end (data through)"])[:10],
@@ -84,7 +93,8 @@ for i, c in enumerate(range(2, 10)):
     rows.append({"scenario": labels[i], "setters": int(v(5)), "capacity_q": num(v(7), 0), "p0_q": num(v(9), 0),
                  "revenue_p0": num(v(12), 0), "cost_p0": num(v(17), 0), "cm_p0": num(v(18), 0),
                  "cold_q": num(v(23), 0), "cold_data": num(v(25), 0), "revenue_cold": num(v(26), 0),
-                 "cm_cold": num(v(28), 0)})
+                 "cm_cold": num(v(28), 0), "revenue_p0_all": num(v(35), 0), "cm_p0_all": num(v(36), 0),
+                 "revenue_cold_all": num(v(38), 0), "cm_cold_all": num(v(39), 0)})
 dump("team", rows, "Team_PnL tab")
 
 # ---- supply curve (Supply rows 11+)
@@ -116,7 +126,10 @@ for r in range(hdr + 1, v.max_row + 1):
     rows.append({"rank": g(1), "setter": g(2), "pay_type": g(3), "active_days": g(4),
                  "q_per_day": num(g(5)), "qual_rate": num(g(6), 3) if g(6) != "" else None,
                  "revenue": num(g(7), 0), "cost": num(g(8), 0), "cm": num(g(9), 0),
-                 "cm_modeled": num(g(10), 0), "gap": num(g(11), 0), "status": g(12) or ""})
+                 "cm_modeled": num(g(10), 0), "gap": num(g(11), 0), "status": g(12) or "",
+                 "margin_q": num(g(13), 3) if isinstance(g(13), (int, float)) else None,
+                 "revenue_all": num(g(14), 0), "cm_all": num(g(15), 0),
+                 "margin_all": num(g(16), 3) if isinstance(g(16), (int, float)) else None})
 dump("setters", rows, "Actual_vs_Model tab (ranked view)")
 
 # ---- assumptions (Inputs: scalars + pay types)
