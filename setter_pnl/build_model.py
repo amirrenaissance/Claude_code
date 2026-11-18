@@ -164,18 +164,18 @@ section(wsI, r, "Partner pricing (revenue per billable meeting)", 9); r += 1
 header(wsI, r, ["Partner", "Billing basis (Booked/Held)", "Price $", "Show rate", "Eff. $ per billable booking",
                 "Qualified bookings in window", "Mix share", "Status", "Source / note"]); r += 1
 PARTNERS = [
-    ("GoQualifi", "Booked", 150, 0.395, "GUESS", "Pay per appointment (Partner Register); price not found. Show = 39.5% on reported (show-label sheet Jul-Nov)"),
-    ("Llama", "Booked", 205, 0.649, "GUESS", "'$205 per meeting, $175 if DNQ' (Slack 2026-10-16, partner unnamed; assumed Llama PPA)"),
-    ("Big Think Capital", "Booked", 100, 0.668, "GUESS", "PPA + 10% rev share; contract not located. Show = 1 - no-show rate"),
-    ("GreenBridge Capital", "Booked", 50, 0.553, "GUESS", "50% rev share, no PPA: per-meeting value is an estimate"),
-    ("Essential Capital", "Booked", 100, 0.685, "GUESS", ""),
-    ("Direct Funding Now", "Booked", 100, 0.867, "GUESS", "Terms not recorded (Partner Register)"),
-    ("Sunlight Capital", "Booked", 100, 0.824, "GUESS", ""),
-    ("Fresh Funding", "Booked", 100, 0.778, "GUESS", ""),
-    ("Mode", "Booked", 100, 0.978, "GUESS", ""),
-    ("License Your Data", "Booked", 100, 0.60, "GUESS", "Data offer; partner reports no outcomes"),
+    ("GoQualifi", "Booked", 155, 0.395, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Llama", "Booked", 155, 0.649, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Big Think Capital", "Booked", 155, 0.668, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("GreenBridge Capital", "Booked", 155, 0.553, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Essential Capital", "Booked", 155, 0.685, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Direct Funding Now", "Booked", 155, 0.867, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Sunlight Capital", "Booked", 155, 0.824, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Fresh Funding", "Booked", 155, 0.778, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("Mode", "Booked", 155, 0.978, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("License Your Data", "Booked", 155, 0.60, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
     ("Collins", "Held", 260, 0.619, "CONFIRMED", "Oscar 2026-10-27: 'we only bill $260 per held meeting'. Show 61.9%"),
-    ("SBG Lending", "Booked", 185, 0.60, "GUESS", "Per-meeting partner from brief; no bookings in window. $185/qualified booked is the standard offer (#biz-dev)"),
+    ("SBG Lending", "Booked", 155, 0.60, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
 ]
 part_first = r
 for p, basis, price, show, status, src in PARTNERS:
@@ -190,7 +190,7 @@ for p, basis, price, show, status, src in PARTNERS:
 # catch-all row
 wsI.cell(r, 1, "Other (unlisted partners)")
 wsI.cell(r, 2, "Booked").font = F_IN
-c = wsI.cell(r, 3, 100); c.font = F_IN; c.number_format = USD; c.fill = FILL_GUESS
+c = wsI.cell(r, 3, 155); c.font = F_IN; c.number_format = USD
 c = wsI.cell(r, 4, 0.6); c.font = F_IN; c.number_format = PCT
 wsI.cell(r, 5, f'=C{r}*IF(B{r}="Held",D{r},1)').number_format = USD
 wsI.cell(r, 6, f"=COUNTIFS(act_q,1,act_inwin,1)-SUM(F{part_first}:F{r-1})")
@@ -199,7 +199,7 @@ part_last = r
 for rr in range(part_first, part_last + 1):
     wsI.cell(rr, 7, f"=IFERROR(F{rr}/SUM($F${part_first}:$F${part_last}),0)").number_format = PCT
     st = next((x[4] for x in PARTNERS if x[0] == wsI.cell(rr, 1).value), "GUESS")
-    src = next((x[5] for x in PARTNERS if x[0] == wsI.cell(rr, 1).value), "Used for any partner not listed above")
+    src = next((x[5] for x in PARTNERS if x[0] == wsI.cell(rr, 1).value), "Used for any partner not listed above; $155 standard rate")
     wsI.cell(rr, 8, st); wsI.cell(rr, 9, src).font = F_NOTE
 name("PartnerTbl", "Inputs", f"$A${part_first}:$E${part_last}")
 r += 1
@@ -608,7 +608,7 @@ wsV.freeze_panes = "C4"
 wsM = wb.create_sheet("Summary", 0)
 wsM["A1"] = "Renaissance setter floor - P&L summary"; wsM["A1"].font = Font(bold=True, size=16, color=NAVY)
 wsM["A2"] = ("All figures are live formulas. Yellow inputs on the Inputs tab are guesses: "
-             "partner prices, ramp, tenure and overhead drive most of the result.")
+             "ramp, tenure, overhead and cold-lane conversion matter most. Price = $155/meeting (Collins $260/held).")
 wsM["A2"].font = F_NOTE
 wsM["A3"] = ("Contribution margin = partner revenue minus setter-floor costs. It does NOT include the email "
              "infrastructure cost of generating P0 replies (company KPI: ~$366 modelled cost per meeting, all channels).")
@@ -651,8 +651,7 @@ for item in KP:
     r += 1
 r += 1
 section(wsM, r, "Inputs that are GUESSED (confirm these first)", 2); r += 1
-for g in ["Partner prices for every partner except Collins ($260/held)",
-          "Ramp: month 1 = 50%, month 2 = 80%", "Expected tenure: 6 months",
+for g in ["Ramp: month 1 = 50%, month 2 = 80%", "Expected tenure: 6 months",
           "Management overhead $350/seat; Trainual $8; phone numbers $10",
           "PH part-time and LATAM junior base pay; pay type of the Nov 13 class (set to LATAM full-time)",
           "Share of positives routed to setters (100%)",
