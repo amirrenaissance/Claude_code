@@ -236,7 +236,8 @@ wsA.freeze_panes = "A2"
 # ============================================================================ ROSTER
 wsR = wb.create_sheet("Roster")
 header(wsR, 1, ["Setter", "Offer", "Pay type", "Base override $/mo", "Commission override $/mtg",
-                "Active (Y/N)", "Notes", "Effective base", "Effective commission"])
+                "Active (Y/N)", "Notes", "Effective base", "Effective commission",
+                "Paid from (start date)", "Calling from"])
 ROSTER = [
     ("katherine", "Funding", "PH full-time", None, None, "Y", "Upwork agency $7/hr"),
     ("maria", "Funding", "PH full-time", None, None, "Y", "Upwork agency $7/hr"),
@@ -248,10 +249,13 @@ ROSTER = [
     ("steve", "Funding", "LATAM full-time", None, None, "Y", ""),
     ("jacobo", "Funding", "LATAM full-time", None, None, "Y", "Moved Pre-IPO -> Funding Nov 4"),
     ("alejandro", "Data Broker", "LATAM full-time", 2800, 10, "Y", "Amir 11/16: $2,800 + $10/qualified held"),
-    ("pablo", "Data Broker", "Pipeline manager", None, 0, "Y", "Also rebooks no-shows; that work is not in booking revenue"),
-    ("marwan", "Pre-IPO", "Egypt (NAC)", None, None, "N", "No bookings after Oct 14"),
+    ("pablo", "Data Broker", "Pipeline manager", None, 0, "N", "Runs the Data Broker team (manager, not a setter): excluded from setter P&L and headcount"),
+    ("marwan", "Pre-IPO", "Egypt (NAC)", None, None, "N", "Terminated"),
 ] + [(n, "Funding", "LATAM full-time", None, None, "Y", "Nov 13 class; pay type GUESSED")
-     for n in ("leon", "edgardo", "eddie", "angela", "edwin", "manuel", "christopher", "mateo", "stephy")]
+     for n in ("leon", "edgardo", "eddie", "angela", "edwin", "mateo")] \
+  + [(n, "Funding", "LATAM full-time", None, None, "Y", "Training from Nov 9, calling from Nov 14; pay type GUESSED")
+     for n in ("stephy", "manuel", "christopher")]
+STARTS = {n: (dt.date(2026, 11, 9), dt.date(2026, 11, 14)) for n in ("stephy", "manuel", "christopher")}
 seen = {x[0] for x in ROSTER}
 for s in sorted({x["setter"] for x in rows} - seen):
     ROSTER.append((s, "?", "LATAM full-time", None, None, "Y", "Pay type GUESSED"))
@@ -264,10 +268,13 @@ for i, (s, off, pt, bo, co, act, note) in enumerate(ROSTER, start=2):
     wsR.cell(i, 7, note).font = F_NOTE
     wsR.cell(i, 8, f'=IF(D{i}<>"",D{i},VLOOKUP(C{i},PayTbl,2,0))').number_format = USD
     wsR.cell(i, 9, f'=IF(E{i}<>"",E{i},in_Commission)').number_format = USD2
+    for col, v in zip((10, 11), STARTS.get(s, (None, None))):
+        c = wsR.cell(i, col, v); c.font = F_IN; c.border = BOX; c.number_format = "yyyy-mm-dd"
 N_ROSTER = len(ROSTER)
-name("in_ActiveN", "Roster", "$K$2")
-wsR["J2"] = "Active setters"; wsR["K2"] = '=COUNTIF($F$2:$F$500,"Y")'; wsR["J2"].font = F_B
-widths(wsR, {"A": 13, "B": 12, "C": 18, "D": 12, "E": 12, "F": 9, "G": 52, "H": 12, "I": 12, "J": 14})
+name("in_ActiveN", "Roster", "$N$2")
+wsR["M2"] = "Active setters"; wsR["N2"] = '=COUNTIF($F$2:$F$500,"Y")'; wsR["M2"].font = F_B
+wsR["M3"] = "Blank start dates: cost runs from the first booking in the window."; wsR["M3"].font = F_NOTE
+widths(wsR, {"A": 13, "B": 12, "C": 18, "D": 12, "E": 12, "F": 9, "G": 60, "H": 12, "I": 12, "J": 13, "K": 13, "M": 16})
 wsR.freeze_panes = "A2"
 
 # ============================================================================ SETTER P&L
@@ -518,18 +525,20 @@ widths(wsX, {"A": 44, **{L(2 + j): 13 for j in range(len(shows))}})
 # ============================================================================ ACTUAL vs MODEL
 wsV = wb.create_sheet("Actual_vs_Model")
 wsV["A1"] = "Actual vs modeled, current setters (actuals window on Inputs; booking form)"; wsV["A1"].font = F_TITLE
-wsV["A2"] = ("Actual revenue = billable bookings x partner price. Costs prorated to active selling days "
-             "(first to last booking in window). Modeled = same days at target. Hiring fee amortized.")
+wsV["A2"] = ("Current setters only (Roster Active = Y). Revenue = billable bookings x partner price. Costs prorated to paid "
+             "days (start date or first booking, to window end); productivity and the modeled column use calling days.")
 wsV["A2"].font = F_NOTE
 VH = ["Setter", "Pay type", "Bookings", "Qualified (billable)", "False bookings", "Qualified rate",
-      "Active selling days", "Qualified / day", "Revenue (actual)", "Base (prorated)", "Commission",
+      "Calling days", "Qualified / day", "Revenue (actual)", "Base (prorated)", "Commission",
       "Seat + overhead (prorated)", "Hiring fee (amortized, prorated)", "Total cost",
       "Contribution margin (actual)", "CM per selling day", "Revenue (modeled)", "Cost (modeled)",
-      "Contribution margin (modeled)", "Actual - modeled", "False-booking status", "rank key", "Rank"]
+      "Contribution margin (modeled)", "Actual - modeled", "False-booking status", "rank key", "Rank", "Paid days"]
 header(wsV, 3, VH)
-first, last = 4, 3 + N_ROSTER
-for k in range(N_ROSTER):
-    i = first + k; rr = 2 + k  # roster row
+ACTIVE_RR = [2 + k for k, x in enumerate(ROSTER) if x[5] == "Y"]  # roster rows of current setters
+N_ACT = len(ACTIVE_RR)
+first, last = 4, 3 + N_ACT
+for k, rr in enumerate(ACTIVE_RR):
+    i = first + k
     s = f"Roster!$A${rr}"
     F = {
         1: f"={s}", 2: f"=Roster!$C${rr}",
@@ -537,13 +546,16 @@ for k in range(N_ROSTER):
         4: f"=COUNTIFS(act_setter,A{i},act_inwin,1,act_q,1)",
         5: f"=COUNTIFS(act_setter,A{i},act_inwin,1,act_false,1)",
         6: f'=IF(C{i}=0,"",D{i}/C{i})',
-        7: f"=IF(C{i}=0,0,NETWORKDAYS(_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1),_xlfn.MAXIFS(act_date,act_setter,A{i},act_inwin,1)))",
+        7: (f"=IF(C{i}=0,0,NETWORKDAYS(IF(Roster!$K${rr}<>\"\",MAX(Roster!$K${rr},in_WinStart),"
+            f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
+        24: (f"=IF(AND(C{i}=0,Roster!$J${rr}=\"\"),0,NETWORKDAYS(IF(Roster!$J${rr}<>\"\",MAX(Roster!$J${rr},in_WinStart),"
+             f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
         8: f"=IF(G{i}=0,0,D{i}/G{i})",
         9: f"=SUMIFS(act_rev,act_setter,A{i},act_inwin,1)",
-        10: f"=Roster!$H${rr}*G{i}/in_Days",
+        10: f"=Roster!$H${rr}*X{i}/in_Days",
         11: f"=D{i}*Roster!$I${rr}",
-        12: f"=in_SeatCost*G{i}/in_Days",
-        13: f"=in_Fee/in_Tenure*G{i}/in_Days",
+        12: f"=in_SeatCost*X{i}/in_Days",
+        13: f"=in_Fee/in_Tenure*X{i}/in_Days",
         14: f"=SUM(J{i}:M{i})",
         15: f"=I{i}-N{i}",
         16: f"=IF(G{i}=0,0,O{i}/G{i})",
@@ -588,13 +600,13 @@ RH = ["Rank", "Setter", "Pay type", "Active days", "Qualified / day", "Qualified
       "Total cost", "CM (actual)", "CM (modeled)", "Actual - modeled", "False-booking status"]
 header(wsV, rk, RH)
 src_cols = {2: "A", 3: "B", 4: "G", 5: "H", 6: "F", 7: "I", 8: "N", 9: "O", 10: "S", 11: "T", 12: "U"}
-for k in range(N_ROSTER):
+for k in range(N_ACT):
     i = rk + 1 + k
     wsV.cell(i, 1, k + 1)
     for col, sc in src_cols.items():
         c = wsV.cell(i, col, f"=INDEX(${sc}${first}:${sc}${last},MATCH($A{i},$W${first}:$W${last},0))")
         c.number_format = {4: NUM0, 5: "0.00", 6: PCT}.get(col, USD if col >= 7 and col <= 11 else "General")
-rk_end = rk + N_ROSTER
+rk_end = rk + N_ACT
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
 for nm, rr_ in (("out_Top1", rk + 1), ("out_Top2", rk + 2), ("out_Top3", rk + 3)):

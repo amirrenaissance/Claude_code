@@ -201,7 +201,7 @@ def write_summary_to_clickhouse(xlsx: Path) -> None:
         d = dict(zip(header, r))
         out.append([str(d["Setter"]), str(d["Pay type"]), int(d["Bookings"] or 0),
                     int(d["Qualified (billable)"] or 0), int(d["False bookings"] or 0),
-                    int(d["Active selling days"] or 0), float(d["Revenue (actual)"] or 0),
+                    int(d["Calling days"] or 0), float(d["Revenue (actual)"] or 0),
                     float(d["Total cost"] or 0), float(d["Contribution margin (actual)"] or 0),
                     float(d["Contribution margin (modeled)"] or 0), dt.datetime.utcnow()])
     table = f"{CH_WRITE_DB}.setter_pnl"
