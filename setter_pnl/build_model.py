@@ -104,10 +104,11 @@ SCALARS: list[tuple] = [
     ("SEC", "Live transfers (to GreenBridge)"),
     ("in_XferPrice", "Price per live transfer", 170, "$/transfer", "CONFIRMED", "Amir 2026-11-19: $170 per live transfer", USD),
     ("in_XferComm", "Setter commission per live transfer", 5, "$/transfer", "GUESS", "Assumed same as a qualified meeting", USD2),
-    ("in_XferShare", "Share of booked outcomes that become a live transfer (instead of a meeting)", 0.19, "%", "DERIVED", "Nov 18-19: 20 successful transfers vs ~87 meetings booked (portal, excl. transfers also logged there). Two days only", PCT),
-    ("in_RevBookedQ", "Revenue per booked outcome, qualified meetings billed", "=(1-in_XferShare)*in_QualRate*in_RevQEff+in_XferShare*in_XferPrice", "$/outcome", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
-    ("in_RevBookedAll", "Revenue per booked outcome, every booking billed", "=(1-in_XferShare)*in_RevQ+in_XferShare*in_XferPrice", "$/outcome", "CALC", "", USD2),
-    ("in_CommBooked", "Commission per booked outcome", "=(1-in_XferShare)*in_QualRate*in_Commission+in_XferShare*in_XferComm", "$/outcome", "CALC", "", USD2),
+    ("in_XferShare", "Live transfers as a share of all outcomes (transfers + meetings)", 0.20, "%", "CONFIRMED", "Amir 2026-11-19: 20% transfers / 80% meetings. Transfers come on top of meetings, they don't replace them. Nov 18-19 actual: 19%", PCT),
+    ("in_XferPerMtg", "Live transfers per booked meeting", "=in_XferShare/(1-in_XferShare)", "per mtg", "CALC", "20/80 mix = 1 transfer for every 4 meetings", "0.00"),
+    ("in_RevBookedQ", "Revenue per booked meeting incl. its transfers, qualified meetings billed", "=in_QualRate*in_RevQEff+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
+    ("in_RevBookedAll", "Revenue per booked meeting incl. its transfers, every booking billed", "=in_RevQ+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "", USD2),
+    ("in_CommBooked", "Commission per booked meeting incl. its transfers", "=in_QualRate*in_Commission+in_XferPerMtg*in_XferComm", "$/mtg", "CALC", "", USD2),
     ("in_PosWeek", "Funding positive replies with a phone entering the dialer per week", 3700, "per week", "ACTUAL", "ClickHouse: 3,699 leads added to the positive-reply list Nov 10-14", NUM0),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
     ("in_Handled", "Live conversations handled per setter per day", 38, "convs/day", "DERIVED", "ClickHouse: 5,127 agent-handled funding calls Nov 10-18 / ~133 setter-days (19 setters x 7 weekdays)", NUM0),
@@ -345,7 +346,7 @@ LINES = [
     ("Qualified meetings / month", "={c}5*{c}6", NUM0),
     ("Booked meetings / month (at qualified rate)", "=IFERROR({c}7/in_QualRate,0)", NUM0),
     ("Revenue per qualified meeting", "=in_RevQEff", USD2),
-    ("REVENUE (booked outcomes x revenue per outcome)", "={c}8*in_RevBookedQ", USD),
+    ("REVENUE (meetings + live transfers on top)", "={c}8*in_RevBookedQ", USD),
     ("Base pay", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))", USD),
     ("Commission (meetings + transfers)", "={c}8*in_CommBooked", USD),
     ("GoFunnel.ai", "=in_GoFunnel", USD),
@@ -359,7 +360,7 @@ LINES = [
     ("Cost per qualified meeting", "=IFERROR({c}18/{c}7,0)", USD2),
     ("", None, None),
     ("IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue: booked outcomes x revenue per outcome (all billed)", "={c}8*in_RevBookedAll", USD),
+    ("Revenue: booked meetings + live transfers, all billed", "={c}8*in_RevBookedAll", USD),
     ("Contribution margin (all billed)", "={c}24-{c}18", USD),
     ("Contribution margin % (all billed)", "=IFERROR({c}25/{c}24,0)", PCT),
     ("", None, None),
@@ -391,14 +392,14 @@ wsB["A2"] = "Qualified meetings/day at which contribution margin = 0 (hiring fee
 header(wsB, 4, ["Line"] + [p[0] for p in PAY] + ["Blended (roster mix)"])
 BE = [
     ("Fixed cost / month (base + seat + hiring amortized)", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))+in_SeatCost+in_Fee/in_Tenure", USD),
-    ("Margin per booked outcome (meeting or transfer, after commission)", "=in_RevBookedQ-in_CommBooked", USD2),
-    ("Break-even BOOKED outcomes / month", "=IFERROR({c}5/{c}6,0)", NUM1),
-    ("Break-even QUALIFIED meetings / day (+ transfers in the measured mix)", "=IFERROR({c}9*(1-in_XferShare)*in_QualRate,0)", "0.00"),
-    ("Break-even BOOKED outcomes / day", "=IFERROR({c}7/in_Days,0)", "0.00"),
+    ("Margin per booked meeting incl. its transfers (after commission)", "=in_RevBookedQ-in_CommBooked", USD2),
+    ("Break-even BOOKED meetings / month (plus transfers on top)", "=IFERROR({c}5/{c}6,0)", NUM1),
+    ("Break-even QUALIFIED meetings / day (plus transfers on top)", "=IFERROR({c}9*in_QualRate,0)", "0.00"),
+    ("Break-even BOOKED meetings / day (plus transfers on top)", "=IFERROR({c}7/in_Days,0)", "0.00"),
     ("Target qualified / day", "=in_Target", NUM1),
     ("Headroom: target / break-even", "=IFERROR({c}10/{c}8,0)", '0.0"x"'),
-    ("IF EVERY BOOKING BILLS: break-even BOOKED outcomes / day", "=IFERROR({c}5/(in_Days*(in_RevBookedAll-in_CommBooked)),0)", "0.00"),
-    ("IF EVERY BOOKING BILLS: same, in QUALIFIED meetings / day", "=IFERROR({c}12*(1-in_XferShare)*in_QualRate,0)", "0.00"),
+    ("IF EVERY BOOKING BILLS: break-even BOOKED meetings / day", "=IFERROR({c}5/(in_Days*(in_RevBookedAll-in_CommBooked)),0)", "0.00"),
+    ("IF EVERY BOOKING BILLS: same, in QUALIFIED meetings / day", "=IFERROR({c}12*in_QualRate,0)", "0.00"),
 ]
 for i, (lab, f, fmt) in enumerate(BE, start=5):
     wsB.cell(i, 1, lab)
@@ -478,7 +479,7 @@ TL = [
     ("Setter-months available", "={c}5", NUM1),
 ] + [tier_row(k) for k in range(6)] + [
     ("Booked meetings from P0-P4", "=SUM({c}8:{c}13)", NUM0),
-    ("Qualified meetings from P0-P4 (live transfers excluded)", "={c}14*(1-in_XferShare)*in_QualRate", NUM0),
+    ("Qualified meetings from P0-P4 (live transfers come on top)", "={c}14*in_QualRate", NUM0),
     ("Setter-months left after P0-P4 is fully worked", "=MAX(0,{c}7-SUM(Lad_Need))", NUM1),
     ("A. POSITIVE-REPLY LADDER ONLY, QUALIFIED MEETINGS BILLED", None, None),
     ("Revenue (meetings + live transfers)", "={c}14*in_RevBookedQ", USD),
@@ -559,7 +560,7 @@ for i, n in enumerate(NS, start=11):
     x = f"($A{i}-Lad_Cum)"
     a_ = f"((ABS({x})+{x})/2)"
     wsU.cell(i, 2, f"=SUMPRODUCT(Lad_Prod*in_Days*(({a_}+Lad_Need-ABS({a_}-Lad_Need))/2))").number_format = NUM0
-    wsU.cell(i, 3, f"=B{i}*(1-in_XferShare)*in_QualRate").number_format = NUM0
+    wsU.cell(i, 3, f"=B{i}*in_QualRate").number_format = NUM0
     left = f"MAX(0,A{i}-SUM(Lad_Need))"
     wsU.cell(i, 4, f"={left}*in_ColdBookDay*in_Days*in_QualRate").number_format = NUM0
     wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
