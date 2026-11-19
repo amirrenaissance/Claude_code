@@ -101,16 +101,14 @@ SCALARS: list[tuple] = [
     ("in_Mgmt", "Management overhead allocation (Julian, QA, payroll)", 350, "$/mo", "GUESS", "Allocation per seat; no cost data found", USD),
     ("in_SeatCost", "Total per-seat cost (excl. base, commission, hiring)", "=in_GoFunnel+in_Trainual+in_Phone+in_Mgmt", "$/mo", "CALC", "", USD),
     ("in_Commission", "Commission per qualified meeting", 5, "$/mtg", "CONFIRMED", "Julian, #ops-amir-julian 2026-11-15: from Nov, $5 per qualified meeting (held no longer matters). Hekmate has an $8 tier (not modelled)", USD2),
-    ("SEC", "Positive-reply (P0) supply"),
-    ("in_P0Week", "Positive replies per week (all workspaces)", 4730, "replies/wk", "ACTUAL", "W45 KPI pack (Nov 2-8): 4,730 positives", NUM0),
-    ("in_P0Month", "Positive replies per month", "=in_P0Week*52/12", "replies/mo", "CALC", "", NUM0),
-    ("in_P0Routed", "Share of positives routed to setters for call-back", 1.0, "%", "GUESS", "IMs also book by email; set lower if setters only see part of P0", PCT),
-    ("in_P0Conv", "Booked setter meetings per P0 routed", 0.064, "%", "DERIVED", "W43 KPI pack: 292 caller meetings / 4,535 positives in the week", PCT),
-    ("in_P0CapQ", "P0 supply cap: qualified meetings per month", "=in_P0Month*in_P0Routed*in_P0Conv*in_QualRate", "mtgs/mo", "CALC", "", NUM0),
-    ("SEC", "Cold-data lane (P4/P6) - only used once P0 runs out"),
+    ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
+    ("in_Handled", "Live conversations handled per setter per day", 38, "convs/day", "DERIVED", "ClickHouse: 5,127 agent-handled funding calls Nov 10-18 / ~133 setter-days (19 setters x 7 weekdays)", NUM0),
+    ("in_MeasDays", "Selling days in the ladder measurement window", 7, "days", "ACTUAL", "Nov 10-18 weekdays", NUM0),
+    ("in_P0CapQ", "P0-P4 supply: qualified meetings per month available", "=SUM(Lad_Avail)*in_QualRate", "mtgs/mo", "CALC", "", NUM0),
+    ("SEC", "Purchased cold data (new P4/P6 numbers) - only used once P0-P4 is fully worked"),
     ("in_ColdPerNum", "Cold data cost per phone number", 0.07, "$/number", "CONFIRMED", "Brief", USD2),
     ("in_ColdNums", "Phone numbers bought per booked cold meeting", 450, "numbers", "GUESS", "Nov 17: 31,585 dials -> 70 meetings (~450 dials/meeting) as proxy", NUM0),
-    ("in_ColdProd", "Cold-lane productivity vs P0 call-backs", 0.5, "%", "GUESS", "Cold numbers convert worse than warm replies", PCT),
+    ("in_ColdBookDay", "Booked meetings per setter per day on purchased cold data", 2, "mtgs/day", "GUESS", "Scenario: 'if we book 2 a day cold'. No cold dialling yet under GoFunnel", NUM1),
 ]
 for item in SCALARS:
     if item[0] == "SEC":
@@ -213,6 +211,41 @@ c = wsI.cell(r, 2, "=in_RevQ*(1+IFERROR(1/in_QualRate-1,0)*in_UnqualBill)")
 c.number_format = USD2; c.font = F_B
 name("in_RevQEff", "Inputs", f"$B${r}")
 wsI.cell(r, 5, "Revenue used throughout the forward model").font = F_NOTE
+r += 2
+section(wsI, r, "Supply ladder: how positive replies are worked over 30+ days (funding calls, measured Nov 10-18 in ClickHouse)", 9); r += 1
+header(wsI, r, ["Tier", "Bookings in window", "Handled conversations in window", "Bookings per conversation",
+                "Booked meetings available / month", "Booked per setter-day on this tier", "Setter-months to work it",
+                "Setter-months before this tier", "What it is"]); r += 1
+LADDER = [
+    ("P0  (first hour)", 196, 1700, "4 calls in 30 min, double-dialled (speed to lead)"),
+    ("P1  (1-24 hours)", 84, 1058, "4 calls over 6 hours"),
+    ("P2  (1-3 days)", 24, 328, "9 calls over 2 days"),
+    ("P3  (3+ days)", 33, 475, "Parked; occasional re-dials"),
+    ("P4  recent carry-over", 31, 645, "Unreached recent positives re-dialled (12.7 calls/person)"),
+    ("P4  old carry-over", 24, 921, "Aged positives from before GoFunnel; ~13,800 never dialled yet"),
+]
+lad_first = r
+for t_, bk_, hd_, what in LADDER:
+    wsI.cell(r, 1, t_)
+    for col, v in ((2, bk_), (3, hd_)):
+        c = wsI.cell(r, col, v); c.font = F_IN; c.fill = FILL_ACT; c.border = BOX
+    wsI.cell(r, 4, f"=IFERROR(B{r}/C{r},0)").number_format = PCT
+    wsI.cell(r, 5, f"=B{r}*in_Days/in_MeasDays").number_format = NUM0
+    wsI.cell(r, 6, f"=D{r}*in_Handled").number_format = "0.00"
+    wsI.cell(r, 7, f"=IFERROR(E{r}/(F{r}*in_Days),0)").number_format = "0.0"
+    wsI.cell(r, 8, "=0" if r == lad_first else f"=H{r-1}+G{r-1}").number_format = "0.0"
+    wsI.cell(r, 9, what).font = F_NOTE
+    r += 1
+lad_last = r - 1
+for n_, col in (("Lad_Avail", "E"), ("Lad_Prod", "F"), ("Lad_Need", "G"), ("Lad_Cum", "H")):
+    name(n_, "Inputs", f"${col}${lad_first}:${col}${lad_last}")
+wsI.cell(r, 1, "Total: setter-months the P0-P4 ladder can absorb each month").font = F_B
+c = wsI.cell(r, 7, f"=SUM(G{lad_first}:G{lad_last})"); c.number_format = "0.0"; c.font = F_B
+c = wsI.cell(r, 5, f"=SUM(E{lad_first}:E{lad_last})"); c.number_format = NUM0; c.font = F_B
+r += 1
+wsI.cell(r, 1, ("Source: GoFunnel call dispositions ('gfbook' = booked) joined to positive-reply list membership by lead; tier = hours "
+                "between the reply entering the list and the call. Setters work the best tier first; once a tier is used up, "
+                "extra setters move down to the next one. The 30+ day tail of P3 is not fully observed yet.")).font = F_NOTE
 r += 2
 wsI.cell(r, 1, "Rule: 3 confirmed false bookings = termination. False bookings never bill (Actuals col L) "
                "and are flagged on Actual_vs_Model.").font = F_NOTE
@@ -408,53 +441,55 @@ wsP.freeze_panes = "C5"
 # ============================================================================ TEAM P&L
 wsT = wb.create_sheet("Team_PnL")
 wsT["A1"] = "Team P&L by headcount (monthly, steady state, current roster pay mix)"; wsT["A1"].font = F_TITLE
-wsT["A2"] = ("Capacity = setters x target x days. P0-only block caps meetings at P0 supply. "
-             "Cold-lane block fills unused capacity with P4/P6 cold data at lower productivity.")
+wsT["A2"] = ("Setters work the positive-reply ladder best tier first (P0, then P1 ... P4 carry-over), at each tier's measured "
+             "productivity. Block B sends setters left over after P4 onto purchased cold data.")
 wsT["A2"].font = F_NOTE
 cols = [6, 12, 20, 30, 50, 100, "=in_ActiveN", "=in_ActiveN+12"]
 header(wsT, 4, ["Line ($/month)", "6", "12", "20", "30", "50", "100", "Current team", "Current + 12", "Change from +12"])
 NT = len(cols)
+def tier_row(k):
+    return (f"Booked from {LADDER[k][0].split()[0]} {' '.join(LADDER[k][0].split()[1:])}",
+            f"=INDEX(Lad_Prod,{k+1})*in_Days*MAX(0,MIN(INDEX(Lad_Need,{k+1}),{{c}}7-INDEX(Lad_Cum,{k+1})))", NUM0)
 TL = [
     ("Setters", None, NUM0),
     ("Blended base / setter", "=in_BlendBase", USD),
-    ("Capacity: qualified meetings at target", "={c}5*in_Target*in_Days", NUM0),
-    ("P0 supply cap: qualified meetings", "=in_P0CapQ", NUM0),
-    ("P0 qualified meetings delivered", "=MIN({c}7,{c}8)", NUM0),
-    ("Capacity used by P0 (%)", "=IFERROR({c}9/{c}7,0)", PCT),
-    ("A. P0 ONLY (no cold data)", None, None),
-    ("Revenue", "={c}9*in_RevQEff", USD),
+    ("Setter-months available", "={c}5", NUM1),
+] + [tier_row(k) for k in range(6)] + [
+    ("Booked meetings from P0-P4", "=SUM({c}8:{c}13)", NUM0),
+    ("Qualified meetings from P0-P4", "={c}14*in_QualRate", NUM0),
+    ("Setter-months left after P0-P4 is fully worked", "=MAX(0,{c}7-SUM(Lad_Need))", NUM1),
+    ("A. POSITIVE-REPLY LADDER ONLY, QUALIFIED MEETINGS BILLED", None, None),
+    ("Revenue", "={c}15*in_RevQEff", USD),
     ("Base pay", "={c}5*{c}6", USD),
-    ("Commission", "={c}9*in_Commission", USD),
+    ("Commission", "={c}15*in_Commission", USD),
     ("GoFunnel + Trainual + phones + mgmt", "={c}5*in_SeatCost", USD),
     ("Hiring fee (amortized; = annual churn re-hiring)", "={c}5*in_Fee/in_Tenure", USD),
-    ("Total cost", "=SUM({c}13:{c}16)", USD),
-    ("CONTRIBUTION MARGIN (P0 only)", "={c}12-{c}17", USD),
-    ("CM per setter", "=IFERROR({c}18/{c}5,0)", USD),
-    ("CM %", "=IFERROR({c}18/{c}12,0)", PCT),
-    ("B. WITH COLD-DATA LANE (P4/P6) FOR UNUSED CAPACITY", None, None),
-    ("Unused capacity (qualified meetings)", "={c}7-{c}9", NUM0),
-    ("Cold-lane qualified meetings", "={c}22*in_ColdProd", NUM0),
-    ("Cold-lane booked meetings", "=IFERROR({c}23/in_QualRate,0)", NUM0),
-    ("Cold data cost", "={c}24*in_ColdNums*in_ColdPerNum", USD),
-    ("Revenue", "=({c}9+{c}23)*in_RevQEff", USD),
-    ("Total cost (P0 costs + extra commission + cold data)", "={c}17+{c}23*in_Commission+{c}25", USD),
-    ("CONTRIBUTION MARGIN (with cold lane)", "={c}26-{c}27", USD),
-    ("CM per setter", "=IFERROR({c}28/{c}5,0)", USD),
-    ("CM %", "=IFERROR({c}28/{c}26,0)", PCT),
+    ("Total cost", "=SUM({c}19:{c}22)", USD),
+    ("CONTRIBUTION MARGIN (ladder only)", "={c}18-{c}23", USD),
+    ("CM per setter", "=IFERROR({c}24/{c}5,0)", USD),
+    ("CM %", "=IFERROR({c}24/{c}18,0)", PCT),
+    ("B. ADD PURCHASED COLD DATA FOR SETTERS LEFT OVER", None, None),
+    ("Cold booked meetings", "={c}16*in_ColdBookDay*in_Days", NUM0),
+    ("Cold qualified meetings", "={c}28*in_QualRate", NUM0),
+    ("Cold data cost", "={c}28*in_ColdNums*in_ColdPerNum", USD),
+    ("Revenue", "=({c}15+{c}29)*in_RevQEff", USD),
+    ("Total cost (ladder costs + extra commission + cold data)", "={c}23+{c}29*in_Commission+{c}30", USD),
+    ("CONTRIBUTION MARGIN (with cold data)", "={c}31-{c}32", USD),
+    ("CM per setter", "=IFERROR({c}33/{c}5,0)", USD),
+    ("CM %", "=IFERROR({c}33/{c}31,0)", PCT),
+    ("C. IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
+    ("Revenue, ladder only (booked x price)", "={c}14*in_RevQ", USD),
+    ("CONTRIBUTION MARGIN, ladder only (all billed)", "={c}37-{c}23", USD),
+    ("CM %, ladder only (all billed)", "=IFERROR({c}38/{c}37,0)", PCT),
+    ("Revenue with cold data (booked x price)", "=({c}14+{c}28)*in_RevQ", USD),
+    ("CONTRIBUTION MARGIN with cold data (all billed)", "={c}40-{c}32", USD),
+    ("CM % with cold data (all billed)", "=IFERROR({c}41/{c}40,0)", PCT),
     ("", None, None),
     ("Hiring fee if EXPENSED: one-off cost to hire this many from zero", "={c}5*in_Fee", USD),
-    ("", None, None),
-    ("C. IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue, P0 only (booked x price)", "=IFERROR({c}9/in_QualRate,0)*in_RevQ", USD),
-    ("CONTRIBUTION MARGIN, P0 only (all billed)", "={c}35-{c}17", USD),
-    ("CM %, P0 only (all billed)", "=IFERROR({c}36/{c}35,0)", PCT),
-    ("Revenue with cold lane (booked x price)", "=IFERROR(({c}9+{c}23)/in_QualRate,0)*in_RevQ", USD),
-    ("CONTRIBUTION MARGIN with cold lane (all billed)", "={c}38-{c}27", USD),
-    ("CM % with cold lane (all billed)", "=IFERROR({c}39/{c}38,0)", PCT),
 ]
 for i, (lab, f, fmt) in enumerate(TL, start=5):
     wsT.cell(i, 1, lab)
-    if lab.isupper() or lab.startswith(("A.", "B.", "C.")):
+    if lab.isupper() or lab.startswith(("A.", "B.", "C.")) or lab.startswith("Booked meetings from"):
         wsT.cell(i, 1).font = F_B
     if lab.startswith(("A.", "B.", "C.")):
         for k in range(1, NT + 3): wsT.cell(i, k).fill = FILL_SEC
@@ -470,44 +505,47 @@ for i, (lab, f, fmt) in enumerate(TL, start=5):
         d = L(2 + NT)
         c = wsT.cell(i, 2 + NT, f"={L(1+NT)}{i}-{L(NT)}{i}" if fmt != PCT else None)
         if fmt != PCT: c.number_format = fmt
-for rr in (18, 28, 36, 39):
+for rr in (24, 33, 38, 41):
     wsT.conditional_formatting.add(f"B{rr}:{L(2+NT)}{rr}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
-name("out_TeamCM_Now", "Team_PnL", f"${L(1+NT-1)}$18")
-name("out_TeamCM_Plus12", "Team_PnL", f"${L(1+NT)}$18")
-name("out_TeamCM_Delta", "Team_PnL", f"${L(2+NT)}$18")
-name("out_TeamCMc_Delta", "Team_PnL", f"${L(2+NT)}$28")
-name("out_TeamCMAll_Now", "Team_PnL", f"${L(NT)}$36")
-name("out_TeamCMAll_Delta", "Team_PnL", f"${L(2+NT)}$36")
-name("out_TeamCMcAll_Delta", "Team_PnL", f"${L(2+NT)}$39")
+name("out_TeamCM_Now", "Team_PnL", f"${L(NT)}$24")
+name("out_TeamCM_Plus12", "Team_PnL", f"${L(1+NT)}$24")
+name("out_TeamCM_Delta", "Team_PnL", f"${L(2+NT)}$24")
+name("out_TeamCMc_Delta", "Team_PnL", f"${L(2+NT)}$33")
+name("out_TeamCMAll_Now", "Team_PnL", f"${L(NT)}$38")
+name("out_TeamCMAll_Delta", "Team_PnL", f"${L(2+NT)}$38")
+name("out_TeamCMcAll_Delta", "Team_PnL", f"${L(2+NT)}$41")
 widths(wsT, {"A": 58, **{L(2 + k): 14 for k in range(NT + 1)}})
 wsT.freeze_panes = "B5"
 
 # ============================================================================ SUPPLY
 wsU = wb.create_sheet("Supply")
-wsU["A1"] = "Where P0 supply runs out and cold-data cost kicks in"; wsU["A1"].font = F_TITLE
-wsU["A3"] = "P0 supply cap (qualified meetings / month)"; wsU["B3"] = "=in_P0CapQ"; wsU["B3"].number_format = NUM0
-wsU["A4"] = "One setter at target uses (qualified / month)"; wsU["B4"] = "=in_Target*in_Days"; wsU["B4"].number_format = NUM0
-wsU["A5"] = "P0 RUNS OUT AT (setters at target)"; wsU["A5"].font = F_B
-wsU["B5"] = "=IFERROR(in_P0CapQ/(in_Target*in_Days),0)"; wsU["B5"].number_format = NUM1
+wsU["A1"] = "How deep into the positive-reply ladder each headcount reaches, and when cold data starts"; wsU["A1"].font = F_TITLE
+wsU["A3"] = "P0-P4 supply: qualified meetings / month available"; wsU["B3"] = "=in_P0CapQ"; wsU["B3"].number_format = NUM0
+wsU["A4"] = "Booked meetings / month available on P0-P4"; wsU["B4"] = "=SUM(Lad_Avail)"; wsU["B4"].number_format = NUM0
+wsU["A5"] = "P0-P4 FULLY WORKED AT (setters)"; wsU["A5"].font = F_B
+wsU["B5"] = "=SUM(Lad_Need)"; wsU["B5"].number_format = NUM1
 wsU["B5"].font = F_B; wsU["B5"].fill = FILL_KPI
 name("out_P0RunOut", "Supply", "$B$5")
 wsU["A6"] = "Current active setters"; wsU["B6"] = "=in_ActiveN"
 wsU["A7"] = "Cold data cost per cold qualified meeting"; wsU["B7"] = "=IFERROR(in_ColdNums*in_ColdPerNum/in_QualRate,0)"; wsU["B7"].number_format = USD2
 wsU["A8"] = "Margin per cold qualified meeting (rev - commission - data)"; wsU["B8"] = "=in_RevQEff-in_Commission-B7"; wsU["B8"].number_format = USD2
-header(wsU, 10, ["Setters", "Capacity (qual)", "P0 qualified", "Cold qualified", "Cold data cost",
-                 "CM: P0 only", "CM: with cold lane", "CM / setter (P0 only)", "Cold lane on?"])
+header(wsU, 10, ["Setters", "Booked from P0-P4", "Qualified from P0-P4", "Cold qualified", "Cold data cost",
+                 "CM: ladder only", "CM: with cold data", "CM / setter (ladder only)", "Cold data on?"])
 NS = list(range(1, 41)) + [45, 50, 60, 70, 80, 90, 100]
 for i, n in enumerate(NS, start=11):
     wsU.cell(i, 1, n).font = F_IN
-    wsU.cell(i, 2, f"=A{i}*in_Target*in_Days").number_format = NUM0
-    wsU.cell(i, 3, f"=MIN(B{i},in_P0CapQ)").number_format = NUM0
-    wsU.cell(i, 4, f"=(B{i}-C{i})*in_ColdProd").number_format = NUM0
-    wsU.cell(i, 5, f"=IFERROR(D{i}/in_QualRate,0)*in_ColdNums*in_ColdPerNum").number_format = USD
+    x = f"($A{i}-Lad_Cum)"
+    a_ = f"((ABS({x})+{x})/2)"
+    wsU.cell(i, 2, f"=SUMPRODUCT(Lad_Prod*in_Days*(({a_}+Lad_Need-ABS({a_}-Lad_Need))/2))").number_format = NUM0
+    wsU.cell(i, 3, f"=B{i}*in_QualRate").number_format = NUM0
+    left = f"MAX(0,A{i}-SUM(Lad_Need))"
+    wsU.cell(i, 4, f"={left}*in_ColdBookDay*in_Days*in_QualRate").number_format = NUM0
+    wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
     fixed = f"A{i}*(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
     wsU.cell(i, 6, f"=C{i}*(in_RevQEff-in_Commission)-{fixed}").number_format = USD
     wsU.cell(i, 7, f"=(C{i}+D{i})*(in_RevQEff-in_Commission)-E{i}-{fixed}").number_format = USD
     wsU.cell(i, 8, f"=F{i}/A{i}").number_format = USD
-    wsU.cell(i, 9, f'=IF(E{i}>0,"COLD DATA ON","P0 only")')
+    wsU.cell(i, 9, f'=IF(E{i}>0,"COLD DATA ON","P0-P4 only")')
 end = 10 + len(NS)
 wsU.conditional_formatting.add(f"A11:I{end}", FormulaRule(formula=["$E11>0"], fill=PatternFill("solid", fgColor="FCE4D6")))
 wsU.conditional_formatting.add(f"F11:H{end}", CellIsRule(operator="lessThan", formula=["0"], font=Font(color="C00000")))
@@ -674,13 +712,13 @@ KP = [
     ("Actual qualified meetings per active setter-day (window)", "=in_ActQPD", "0.00"),
     ("Hiring-fee payback, LATAM full-time, at ACTUAL productivity (month #)", "=out_Payback_LATAM_Act", "General"),
     ("SEC", "Supply and scale"),
-    ("P0 supply cap (qualified meetings / month)", "=in_P0CapQ", NUM0),
-    ("P0 runs out at (setters at target)", "=out_P0RunOut", NUM1),
+    ("P0-P4 supply: qualified meetings / month available", "=in_P0CapQ", NUM0),
+    ("P0-P4 ladder fully worked at (setters)", "=out_P0RunOut", NUM1),
     ("Current active setters", "=in_ActiveN", NUM0),
-    ("Team CM / month, current team, P0 only", "=out_TeamCM_Now", USD),
-    ("Team CM / month, current + 12, P0 only", "=out_TeamCM_Plus12", USD),
-    ("Change in CM from adding 12 setters, P0 only", "=out_TeamCM_Delta", USD),
-    ("Change in CM from adding 12 setters, with cold lane", "=out_TeamCMc_Delta", USD),
+    ("Team CM / month, current team, P0-P4 ladder only", "=out_TeamCM_Now", USD),
+    ("Team CM / month, current + 12, P0-P4 ladder only", "=out_TeamCM_Plus12", USD),
+    ("Change in CM from adding 12 setters, P0-P4 ladder only", "=out_TeamCM_Delta", USD),
+    ("Change in CM from adding 12 setters, with purchased cold data", "=out_TeamCMc_Delta", USD),
     ("SEC", "Actuals (booking form, window on Inputs)"),
     ("Setters active in window", "=out_ActActive", NUM0),
     ("Setters with positive contribution margin", "=out_ActProfitable", NUM0),
@@ -695,9 +733,9 @@ KP = [
     ("Contribution margin % in window (all billed)", "=out_ActTeamPctAll", PCT),
     ("Setters with positive CM (all billed)", "=out_ActProfitableAll", NUM0),
     ("Break-even BOOKED meetings / day, roster mix (all billed)", "=out_BE_AllBooked", "0.00"),
-    ("Team CM / month, current team, P0 only (all billed)", "=out_TeamCMAll_Now", USD),
-    ("Change in CM from adding 12 setters, P0 only (all billed)", "=out_TeamCMAll_Delta", USD),
-    ("Change in CM from adding 12 setters, with cold lane (all billed)", "=out_TeamCMcAll_Delta", USD),
+    ("Team CM / month, current team, P0-P4 ladder only (all billed)", "=out_TeamCMAll_Now", USD),
+    ("Change in CM from adding 12 setters, P0-P4 ladder only (all billed)", "=out_TeamCMAll_Delta", USD),
+    ("Change in CM from adding 12 setters, with purchased cold data (all billed)", "=out_TeamCMcAll_Delta", USD),
 ]
 r = 4
 for item in KP:
@@ -712,8 +750,7 @@ section(wsM, r, "Inputs that are GUESSED (confirm these first)", 2); r += 1
 for g in ["Ramp: month 1 = 50%, month 2 = 80%", "Expected tenure: 6 months",
           "Management overhead $350/seat; Trainual $8; phone numbers $10",
           "PH part-time and LATAM junior base pay; pay type of the Nov 13 class (set to LATAM full-time)",
-          "Share of positives routed to setters (100%)",
-          "Cold lane: 450 numbers per booked meeting, 50% productivity vs P0"]:
+          "Purchased cold data: 2 booked meetings a day per setter, 450 numbers per booked meeting"]:
     wsM.cell(r, 1, "• " + g); r += 1
 r += 1
 section(wsM, r, "Data sources", 2); r += 1

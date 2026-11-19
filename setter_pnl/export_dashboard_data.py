@@ -46,13 +46,13 @@ k = {
     "payback_target": S["Hiring-fee payback, LATAM full-time, at target (month #)"],
     "act_q_day": S["Actual qualified meetings per active setter-day (window)"],
     "payback_actual": S["Hiring-fee payback, LATAM full-time, at ACTUAL productivity (month #)"],
-    "p0_cap": S["P0 supply cap (qualified meetings / month)"],
-    "p0_runout": S["P0 runs out at (setters at target)"],
+    "p0_cap": S["P0-P4 supply: qualified meetings / month available"],
+    "p0_runout": S["P0-P4 ladder fully worked at (setters)"],
     "active_n": S["Current active setters"],
-    "team_cm_now": S["Team CM / month, current team, P0 only"],
-    "team_cm_plus12": S["Team CM / month, current + 12, P0 only"],
-    "delta12_p0": S["Change in CM from adding 12 setters, P0 only"],
-    "delta12_cold": S["Change in CM from adding 12 setters, with cold lane"],
+    "team_cm_now": S["Team CM / month, current team, P0-P4 ladder only"],
+    "team_cm_plus12": S["Team CM / month, current + 12, P0-P4 ladder only"],
+    "delta12_p0": S["Change in CM from adding 12 setters, P0-P4 ladder only"],
+    "delta12_cold": S["Change in CM from adding 12 setters, with purchased cold data"],
     "win_active": S["Setters active in window"],
     "win_profitable": S["Setters with positive contribution margin"],
     "win_rev": S["Team revenue in window (billable bookings x price)"],
@@ -64,9 +64,9 @@ k = {
     "win_pct_all": S["Contribution margin % in window (all billed)"],
     "win_profitable_all": S["Setters with positive CM (all billed)"],
     "be_booked_day_all": S["Break-even BOOKED meetings / day, roster mix (all billed)"],
-    "team_cm_now_all": S["Team CM / month, current team, P0 only (all billed)"],
-    "delta12_p0_all": S["Change in CM from adding 12 setters, P0 only (all billed)"],
-    "delta12_cold_all": S["Change in CM from adding 12 setters, with cold lane (all billed)"],
+    "team_cm_now_all": S["Team CM / month, current team, P0-P4 ladder only (all billed)"],
+    "delta12_p0_all": S["Change in CM from adding 12 setters, P0-P4 ladder only (all billed)"],
+    "delta12_cold_all": S["Change in CM from adding 12 setters, with purchased cold data (all billed)"],
     "target_q_day": inp["Target qualified meetings per setter per day (OTE)"],
     "win_start": str(inp["Actuals window start (last 60 days)"])[:10],
     "win_end": str(inp["Actuals window end (data through)"])[:10],
@@ -90,12 +90,24 @@ labels = ["6", "12", "20", "30", "50", "100", "Current team", "Current + 12"]
 rows = []
 for i, c in enumerate(range(2, 10)):
     v = lambda r: t.cell(r, c).value
-    rows.append({"scenario": labels[i], "setters": int(v(5)), "capacity_q": num(v(7), 0), "p0_q": num(v(9), 0),
-                 "revenue_p0": num(v(12), 0), "cost_p0": num(v(17), 0), "cm_p0": num(v(18), 0),
-                 "cold_q": num(v(23), 0), "cold_data": num(v(25), 0), "revenue_cold": num(v(26), 0),
-                 "cm_cold": num(v(28), 0), "revenue_p0_all": num(v(35), 0), "cm_p0_all": num(v(36), 0),
-                 "revenue_cold_all": num(v(38), 0), "cm_cold_all": num(v(39), 0)})
+    rows.append({"scenario": labels[i], "setters": int(v(5)), "booked_ladder": num(v(14), 0), "p0_q": num(v(15), 0),
+                 "revenue_p0": num(v(18), 0), "cost_p0": num(v(23), 0), "cm_p0": num(v(24), 0),
+                 "cold_q": num(v(29), 0), "cold_data": num(v(30), 0), "revenue_cold": num(v(31), 0),
+                 "cm_cold": num(v(33), 0), "revenue_p0_all": num(v(37), 0), "cm_p0_all": num(v(38), 0),
+                 "revenue_cold_all": num(v(40), 0), "cm_cold_all": num(v(41), 0),
+                 **{f"tier{k}": num(v(8 + k), 0) for k in range(6)}})
 dump("team", rows, "Team_PnL tab")
+
+# ---- supply ladder (Inputs tab ladder table)
+wi = wb["Inputs"]
+hdr_row = next(r for r in range(1, wi.max_row + 1) if wi.cell(r, 1).value == "Tier")
+rows = []
+for r in range(hdr_row + 1, hdr_row + 7):
+    g = lambda c: wi.cell(r, c).value
+    rows.append({"tier": g(1).replace("  ", " "), "bookings_window": g(2), "handled_window": g(3), "book_rate": num(g(4), 4),
+                 "avail_month": num(g(5), 0), "booked_per_setter_day": num(g(6), 2), "setter_months": num(g(7), 1),
+                 "what": g(9)})
+dump("ladder", rows, "Inputs tab › Supply ladder")
 
 # ---- supply curve (Supply rows 11+)
 rows = []
