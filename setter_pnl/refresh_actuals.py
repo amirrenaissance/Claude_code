@@ -146,6 +146,7 @@ def write_actuals(wb, rows: list[dict]) -> None:
         ws.cell(i, 14, f"=IF(AND(B{i}>=in_WinStart,B{i}<=in_WinEnd),1,0)")
         ws.cell(i, 15, f'=IF(F{i}="FALSE BOOKING",1,0)')
         ws.cell(i, 16, f"=J{i}*(1-O{i})").number_format = '"$"#,##0'  # revenue if every booking bills
+        ws.cell(i, 17, f"=IF(COUNTIFS(C$2:C{i},C{i},B$2:B{i},B{i})=1,1,0)")  # first booking of the setter-day
 
 
 def sync_roster(wb, rows: list[dict]) -> list[str]:

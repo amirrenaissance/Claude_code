@@ -101,6 +101,10 @@ SCALARS: list[tuple] = [
     ("in_Mgmt", "Management overhead allocation (Julian, QA, payroll)", 350, "$/mo", "GUESS", "Allocation per seat; no cost data found", USD),
     ("in_SeatCost", "Total per-seat cost (excl. base, commission, hiring)", "=in_GoFunnel+in_Trainual+in_Phone+in_Mgmt", "$/mo", "CALC", "", USD),
     ("in_Commission", "Commission per qualified meeting", 5, "$/mtg", "CONFIRMED", "Julian, #ops-amir-julian 2026-11-15: from Nov, $5 per qualified meeting (held no longer matters). Hekmate has an $8 tier (not modelled)", USD2),
+    ("SEC", "Live transfers (to GreenBridge)"),
+    ("in_XferPrice", "Price per live transfer", 170, "$/transfer", "CONFIRMED", "Amir 2026-11-19: $170 per live transfer", USD),
+    ("in_XferComm", "Setter commission per live transfer", 5, "$/transfer", "GUESS", "Assumed same as a qualified meeting", USD2),
+    ("in_XferPerDay", "Live transfers per setter per day", 0.5, "per day", "DERIVED", "GoFunnel: 20 successful setter transfers Nov 18-19 (~19 setters x 2 days). Nov 11-13 pace was ~0.2/day", "0.00"),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
     ("in_Handled", "Live conversations handled per setter per day", 38, "convs/day", "DERIVED", "ClickHouse: 5,127 agent-handled funding calls Nov 10-18 / ~133 setter-days (19 setters x 7 weekdays)", NUM0),
     ("in_MeasDays", "Selling days in the ladder measurement window", 7, "days", "ACTUAL", "Nov 10-18 weekdays", NUM0),
@@ -256,15 +260,29 @@ wsI.freeze_panes = "A5"
 wsA = wb.create_sheet("Actuals")
 header(wsA, 1, ["Booking ID", "Booked date", "Setter", "Partner", "Offer", "Verdict (recording check)",
                 "Min qualified", "Fully qualified", "Source", "Eff. $ per billable booking",
-                "Qualified (1/0)", "Billable units", "Revenue $", "In window (1/0)", "False booking (1/0)", "Revenue if all billed $"])
+                "Qualified (1/0)", "Billable units", "Revenue $", "In window (1/0)", "False booking (1/0)", "Revenue if all billed $", "First booking of setter-day (1/0)"])
 rows = load_csv(DEFAULT_CSV)
 write_actuals(wb, rows)
 for n, col in (("act_date", "B"), ("act_setter", "C"), ("act_partner", "D"), ("act_q", "K"),
-               ("act_rev", "M"), ("act_inwin", "N"), ("act_false", "O"), ("act_rev_all", "P")):
+               ("act_rev", "M"), ("act_inwin", "N"), ("act_false", "O"), ("act_rev_all", "P"), ("act_dayfirst", "Q")):
     name(n, "Actuals", f"${col}$2:${col}${MAX_ROW}")
 widths(wsA, {"A": 11, "B": 11, "C": 12, "D": 20, "E": 11, "F": 24, "G": 9, "H": 9, "I": 10,
              "J": 11, "K": 9, "L": 9, "M": 10, "N": 9, "O": 9})
 wsA.freeze_panes = "A2"
+
+# ============================================================================ TRANSFERS
+wsTr = wb.create_sheet("Transfers")
+header(wsTr, 1, ["Date", "GoFunnel agent", "Setter", "Destination", "Campaign"])
+import csv as _csv
+_tr = list(_csv.DictReader(open(Path(__file__).resolve().parent / "data" / "live_transfers.csv")))
+for i, t_ in enumerate(_tr, start=2):
+    c = wsTr.cell(i, 1, dt.date.fromisoformat(t_["date"])); c.number_format = "yyyy-mm-dd"
+    for col, k in ((2, "agent"), (3, "setter"), (4, "destination"), (5, "campaign")):
+        wsTr.cell(i, col, t_[k])
+name("tr_date", "Transfers", "$A$2:$A$2000"); name("tr_setter", "Transfers", "$C$2:$C$2000")
+wsTr["G1"] = "Successful setter live transfers from GoFunnel transfers(), deduplicated by lead; excludes test and agent-to-agent transfers."
+wsTr["G1"].font = F_NOTE
+widths(wsTr, {"A": 12, "B": 22, "C": 12, "D": 20, "E": 14})
 
 # ============================================================================ ROSTER
 wsR = wb.create_sheet("Roster")
@@ -281,7 +299,7 @@ ROSTER = [
     ("brian", "Funding", "LATAM full-time", None, None, "Y", "Contract Oct 6"),
     ("steve", "Funding", "LATAM full-time", None, None, "Y", ""),
     ("jacobo", "Funding", "LATAM full-time", None, None, "Y", "Moved Pre-IPO -> Funding Nov 4"),
-    ("alejandro", "Data Broker", "LATAM full-time", 2800, 10, "Y", "Amir 11/16: $2,800 + $10/qualified held"),
+    ("alejandro", "Data Broker", "LATAM full-time", 2800, 10, "N", "Data Broker campaign: separate P&L, excluded from the funding setter floor (Amir 11/19)"),
     ("oscarduran", "Funding", "LATAM full-time", None, None, "Y", "In Caller QA only (not in Scorecard data); pay type GUESSED"),
     ("pablo", "Data Broker", "Pipeline manager", None, 0, "N", "Runs the Data Broker team (manager, not a setter): excluded from setter P&L and headcount"),
     ("marwan", "Pre-IPO", "Egypt (NAC)", None, None, "N", "Terminated"),
@@ -323,9 +341,9 @@ LINES = [
     ("Qualified meetings / month", "={c}5*{c}6", NUM0),
     ("Booked meetings / month (at qualified rate)", "=IFERROR({c}7/in_QualRate,0)", NUM0),
     ("Revenue per qualified meeting", "=in_RevQEff", USD2),
-    ("REVENUE", "={c}7*{c}9", USD),
+    ("REVENUE (meetings + live transfers)", "={c}7*{c}9+in_XferPerDay*in_Days*in_XferPrice", USD),
     ("Base pay", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))", USD),
-    ("Commission", "={c}7*in_Commission", USD),
+    ("Commission (meetings + transfers)", "={c}7*in_Commission+in_XferPerDay*in_Days*in_XferComm", USD),
     ("GoFunnel.ai", "=in_GoFunnel", USD),
     ("Trainual", "=in_Trainual", USD),
     ("Phone numbers", "=in_Phone", USD),
@@ -337,7 +355,7 @@ LINES = [
     ("Cost per qualified meeting", "=IFERROR({c}18/{c}7,0)", USD2),
     ("", None, None),
     ("IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue: booked meetings x price", "={c}8*in_RevQ", USD),
+    ("Revenue: booked meetings x price + live transfers", "={c}8*in_RevQ+in_XferPerDay*in_Days*in_XferPrice", USD),
     ("Contribution margin (all billed)", "={c}24-{c}18", USD),
     ("Contribution margin % (all billed)", "=IFERROR({c}25/{c}24,0)", PCT),
     ("", None, None),
@@ -368,7 +386,7 @@ wsB["A1"] = "Break-even meetings per setter per day"; wsB["A1"].font = F_TITLE
 wsB["A2"] = "Qualified meetings/day at which contribution margin = 0 (hiring fee amortized)."; wsB["A2"].font = F_NOTE
 header(wsB, 4, ["Line"] + [p[0] for p in PAY] + ["Blended (roster mix)"])
 BE = [
-    ("Fixed cost / month (base + seat + hiring amortized)", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))+in_SeatCost+in_Fee/in_Tenure", USD),
+    ("Fixed cost / month (base + seat + hiring amortized), net of live-transfer margin", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))+in_SeatCost+in_Fee/in_Tenure-in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)", USD),
     ("Margin per qualified meeting (revenue - commission)", "=in_RevQEff-in_Commission", USD2),
     ("Break-even QUALIFIED meetings / month", "=IFERROR({c}5/{c}6,0)", NUM1),
     ("Break-even QUALIFIED meetings / day", "=IFERROR({c}7/in_Days,0)", "0.00"),
@@ -408,7 +426,7 @@ for m in range(1, 25):
     for j in range(NP):
         cm_col = 3 + j; cum_col = 3 + NP + j
         q = f"in_Target*$B{i}*in_Days"
-        wsP.cell(i, cm_col, f"={q}*(in_RevQEff-in_Commission)-INDEX(PayBase,{j+1})-in_SeatCost").number_format = USD
+        wsP.cell(i, cm_col, f"={q}*(in_RevQEff-in_Commission)+$B{i}*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)-INDEX(PayBase,{j+1})-in_SeatCost").number_format = USD
         prev = f"+{L(cum_col)}{i-1}" if m > 1 else "-in_Fee"
         wsP.cell(i, cum_col, f"={L(cm_col)}{i}{prev}").number_format = USD
 wsP.cell(30, 1, "PAYBACK MONTH").font = F_B
@@ -426,7 +444,7 @@ for k in (ca, cu):
     wsP.cell(4, k).font, wsP.cell(4, k).fill = F_H, PatternFill("solid", fgColor="7F6000")
 for m in range(1, 25):
     i = 4 + m
-    wsP.cell(i, ca, f"=MIN(in_Target,in_ActQPD)*$B{i}*in_Days*(in_RevQEff-in_Commission)"
+    wsP.cell(i, ca, f"=MIN(in_Target,in_ActQPD)*$B{i}*in_Days*(in_RevQEff-in_Commission)+$B{i}*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)"
                     f"-INDEX(PayBase,{lat+1})-in_SeatCost").number_format = USD
     prev = f"+{L(cu)}{i-1}" if m > 1 else "-in_Fee"
     wsP.cell(i, cu, f"={L(ca)}{i}{prev}").number_format = USD
@@ -459,9 +477,9 @@ TL = [
     ("Qualified meetings from P0-P4", "={c}14*in_QualRate", NUM0),
     ("Setter-months left after P0-P4 is fully worked", "=MAX(0,{c}7-SUM(Lad_Need))", NUM1),
     ("A. POSITIVE-REPLY LADDER ONLY, QUALIFIED MEETINGS BILLED", None, None),
-    ("Revenue", "={c}15*in_RevQEff", USD),
+    ("Revenue (meetings + live transfers)", "={c}15*in_RevQEff+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
     ("Base pay", "={c}5*{c}6", USD),
-    ("Commission", "={c}15*in_Commission", USD),
+    ("Commission (meetings + transfers)", "={c}15*in_Commission+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferComm", USD),
     ("GoFunnel + Trainual + phones + mgmt", "={c}5*in_SeatCost", USD),
     ("Hiring fee (amortized; = annual churn re-hiring)", "={c}5*in_Fee/in_Tenure", USD),
     ("Total cost", "=SUM({c}19:{c}22)", USD),
@@ -472,16 +490,16 @@ TL = [
     ("Cold booked meetings", "={c}16*in_ColdBookDay*in_Days", NUM0),
     ("Cold qualified meetings", "={c}28*in_QualRate", NUM0),
     ("Cold data cost", "={c}28*in_ColdNums*in_ColdPerNum", USD),
-    ("Revenue", "=({c}15+{c}29)*in_RevQEff", USD),
+    ("Revenue (meetings + live transfers)", "=({c}15+{c}29)*in_RevQEff+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
     ("Total cost (ladder costs + extra commission + cold data)", "={c}23+{c}29*in_Commission+{c}30", USD),
     ("CONTRIBUTION MARGIN (with cold data)", "={c}31-{c}32", USD),
     ("CM per setter", "=IFERROR({c}33/{c}5,0)", USD),
     ("CM %", "=IFERROR({c}33/{c}31,0)", PCT),
     ("C. IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue, ladder only (booked x price)", "={c}14*in_RevQ", USD),
+    ("Revenue, ladder only (booked x price + live transfers)", "={c}14*in_RevQ+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
     ("CONTRIBUTION MARGIN, ladder only (all billed)", "={c}37-{c}23", USD),
     ("CM %, ladder only (all billed)", "=IFERROR({c}38/{c}37,0)", PCT),
-    ("Revenue with cold data (booked x price)", "=({c}14+{c}28)*in_RevQ", USD),
+    ("Revenue with cold data (booked x price + live transfers)", "=({c}14+{c}28)*in_RevQ+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
     ("CONTRIBUTION MARGIN with cold data (all billed)", "={c}40-{c}32", USD),
     ("CM % with cold data (all billed)", "=IFERROR({c}41/{c}40,0)", PCT),
     ("", None, None),
@@ -542,8 +560,9 @@ for i, n in enumerate(NS, start=11):
     wsU.cell(i, 4, f"={left}*in_ColdBookDay*in_Days*in_QualRate").number_format = NUM0
     wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
     fixed = f"A{i}*(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
-    wsU.cell(i, 6, f"=C{i}*(in_RevQEff-in_Commission)-{fixed}").number_format = USD
-    wsU.cell(i, 7, f"=(C{i}+D{i})*(in_RevQEff-in_Commission)-E{i}-{fixed}").number_format = USD
+    xt = f"MIN(A{i},SUM(Lad_Need))*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)"
+    wsU.cell(i, 6, f"=C{i}*(in_RevQEff-in_Commission)+{xt}-{fixed}").number_format = USD
+    wsU.cell(i, 7, f"=(C{i}+D{i})*(in_RevQEff-in_Commission)+{xt}-E{i}-{fixed}").number_format = USD
     wsU.cell(i, 8, f"=F{i}/A{i}").number_format = USD
     wsU.cell(i, 9, f'=IF(E{i}>0,"COLD DATA ON","P0-P4 only")')
 end = 10 + len(NS)
@@ -591,7 +610,7 @@ VH = ["Setter", "Pay type", "Bookings", "Qualified (billable)", "False bookings"
       "Seat + overhead (prorated)", "Hiring fee (amortized, prorated)", "Total cost",
       "Contribution margin (actual)", "CM per selling day", "Revenue (modeled)", "Cost (modeled)",
       "Contribution margin (modeled)", "Actual - modeled", "False-booking status", "rank key", "Rank", "Paid days",
-      "Revenue (all billed)", "CM (all billed)", "CM % (qualified only)", "CM % (all billed)"]
+      "Revenue (all billed)", "CM (all billed)", "CM % (qualified only)", "CM % (all billed)", "Days with a booking", "Booked / day worked", "Live transfers"]
 header(wsV, 3, VH)
 ACTIVE_RR = [2 + k for k, x in enumerate(ROSTER) if x[5] == "Y"]  # roster rows of current setters
 N_ACT = len(ACTIVE_RR)
@@ -607,16 +626,19 @@ for k, rr in enumerate(ACTIVE_RR):
         6: f'=IF(C{i}=0,"",D{i}/C{i})',
         7: (f"=IF(C{i}=0,0,NETWORKDAYS(IF(Roster!$K${rr}<>\"\",MAX(Roster!$K${rr},in_WinStart),"
             f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
-        25: f"=SUMIFS(act_rev_all,act_setter,A{i},act_inwin,1)",
+        25: f"=SUMIFS(act_rev_all,act_setter,A{i},act_inwin,1)+AE{i}*in_XferPrice",
         26: f"=Y{i}-N{i}",
         27: f'=IF(I{i}=0,"",O{i}/I{i})',
         28: f'=IF(Y{i}=0,"",Z{i}/Y{i})',
         24: (f"=IF(AND(C{i}=0,Roster!$J${rr}=\"\"),0,NETWORKDAYS(IF(Roster!$J${rr}<>\"\",MAX(Roster!$J${rr},in_WinStart),"
              f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
-        8: f"=IF(G{i}=0,0,D{i}/G{i})",
-        9: f"=SUMIFS(act_rev,act_setter,A{i},act_inwin,1)",
+        8: f"=IF(AC{i}=0,0,D{i}/AC{i})",
+        29: f"=COUNTIFS(act_setter,A{i},act_inwin,1,act_dayfirst,1)",
+        30: f"=IF(AC{i}=0,0,C{i}/AC{i})",
+        31: f'=COUNTIFS(tr_setter,A{i},tr_date,">="&in_WinStart,tr_date,"<="&in_WinEnd)',
+        9: f"=SUMIFS(act_rev,act_setter,A{i},act_inwin,1)+AE{i}*in_XferPrice",
         10: f"=Roster!$H${rr}*X{i}/in_Days",
-        11: f"=D{i}*Roster!$I${rr}",
+        11: f"=D{i}*Roster!$I${rr}+AE{i}*in_XferComm",
         12: f"=in_SeatCost*X{i}/in_Days",
         13: f"=in_Fee/in_Tenure*X{i}/in_Days",
         14: f"=SUM(J{i}:M{i})",
@@ -630,7 +652,7 @@ for k, rr in enumerate(ACTIVE_RR):
         22: f"=IF(G{i}=0,-1E9,O{i})+ROW()/1E6",
         23: f"=RANK(V{i},$V${first}:$V${last})",
     }
-    fm = {6: PCT, 8: "0.00", 25: USD, 26: USD, 27: PCT, 28: PCT, 9: USD, 10: USD, 11: USD, 12: USD, 13: USD, 14: USD, 15: USD,
+    fm = {30: "0.00", 6: PCT, 8: "0.00", 25: USD, 26: USD, 27: PCT, 28: PCT, 9: USD, 10: USD, 11: USD, 12: USD, 13: USD, 14: USD, 15: USD,
           16: USD, 17: USD, 18: USD, 19: USD, 20: USD}
     for col, f in F.items():
         c = wsV.cell(i, col, f)
@@ -640,7 +662,7 @@ wsV.conditional_formatting.add(f"O{first}:O{last}", CellIsRule(operator="lessTha
 wsV.conditional_formatting.add(f"O{first}:O{last}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
 tr = last + 1
 wsV.cell(tr, 1, "TEAM TOTAL").font = F_B
-for col in (3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 25, 26):
+for col in (3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 25, 26, 29, 31):
     c = wsV.cell(tr, col, f"=SUM({L(col)}{first}:{L(col)}{last})"); c.font = F_B
     if col >= 9: c.number_format = USD
 name("out_ActTeamCM", "Actual_vs_Model", f"$O${tr}")
@@ -661,25 +683,29 @@ name("out_ActTeamPctAll", "Actual_vs_Model", f"$AB${tr}")
 wsV.cell(tr + 1, 25, f'=COUNTIFS(Z{first}:Z{last},">0",G{first}:G{last},">0")').font = F_B
 name("out_ActProfitableAll", "Actual_vs_Model", f"$Y${tr+1}")
 wsV.cell(tr + 1, 24, "All billed:")
-wsV.cell(tr + 3, 1, "Average qualified meetings per active setter-day (window)")
-c = wsV.cell(tr + 3, 3, f"=IFERROR(D{tr}/G{tr},0)"); c.number_format = "0.00"; c.font = F_B
+wsV.cell(tr + 3, 1, "Average qualified meetings per day worked (days with a booking)")
+c = wsV.cell(tr + 3, 3, f"=IFERROR(D{tr}/AC{tr},0)"); c.number_format = "0.00"; c.font = F_B
+wsV.cell(tr + 4, 1, "Average booked meetings per day worked")
+c = wsV.cell(tr + 4, 3, f"=IFERROR(C{tr}/AC{tr},0)"); c.number_format = "0.00"; c.font = F_B
+name("out_ActBPD", "Actual_vs_Model", f"$C${tr+4}")
+name("out_ActXfers", "Actual_vs_Model", f"$AE${tr}")
 name("in_ActQPD", "Actual_vs_Model", f"$C${tr+3}")
 
 # ranked view
-rk = tr + 5
+rk = tr + 6
 wsV.cell(rk - 1, 1, "RANKED BY CONTRIBUTION MARGIN (actual, window)").font = F_TITLE
 RH = ["Rank", "Setter", "Pay type", "Active days", "Qualified / day", "Qualified rate", "Revenue",
       "Total cost", "CM (actual)", "CM (modeled)", "Actual - modeled", "False-booking status",
-      "CM % (qualified only)", "Revenue (all billed)", "CM (all billed)", "CM % (all billed)"]
+      "CM % (qualified only)", "Revenue (all billed)", "CM (all billed)", "CM % (all billed)", "Booked / day worked", "Live transfers"]
 header(wsV, rk, RH)
 src_cols = {2: "A", 3: "B", 4: "G", 5: "H", 6: "F", 7: "I", 8: "N", 9: "O", 10: "S", 11: "T", 12: "U",
-            13: "AA", 14: "Y", 15: "Z", 16: "AB"}
+            13: "AA", 14: "Y", 15: "Z", 16: "AB", 17: "AD", 18: "AE"}
 for k in range(N_ACT):
     i = rk + 1 + k
     wsV.cell(i, 1, k + 1)
     for col, sc in src_cols.items():
         c = wsV.cell(i, col, f"=INDEX(${sc}${first}:${sc}${last},MATCH($A{i},$W${first}:$W${last},0))")
-        c.number_format = {4: NUM0, 5: "0.00", 6: PCT, 13: PCT, 16: PCT, 14: USD, 15: USD}.get(col, USD if 7 <= col <= 11 else "General")
+        c.number_format = {4: NUM0, 5: "0.00", 6: PCT, 13: PCT, 16: PCT, 14: USD, 15: USD, 17: "0.00", 18: NUM0}.get(col, USD if 7 <= col <= 11 else "General")
 rk_end = rk + N_ACT
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
@@ -709,7 +735,9 @@ KP = [
     ("Break-even QUALIFIED meetings / day (roster mix)", "=out_BE_Blend", "0.00"),
     ("Break-even BOOKED meetings / day (roster mix)", "=out_BE_BlendBooked", "0.00"),
     ("Hiring-fee payback, LATAM full-time, at target (month #)", "=out_Payback_LATAM", "General"),
-    ("Actual qualified meetings per active setter-day (window)", "=in_ActQPD", "0.00"),
+    ("Actual booked meetings per day worked (window)", "=out_ActBPD", "0.00"),
+    ("Actual qualified meetings per day worked (window)", "=in_ActQPD", "0.00"),
+    ("Live transfers in window (setters, to GreenBridge)", "=out_ActXfers", NUM0),
     ("Hiring-fee payback, LATAM full-time, at ACTUAL productivity (month #)", "=out_Payback_LATAM_Act", "General"),
     ("SEC", "Supply and scale"),
     ("P0-P4 supply: qualified meetings / month available", "=in_P0CapQ", NUM0),

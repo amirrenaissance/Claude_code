@@ -33,7 +33,7 @@ def dump(name: str, rows: list[dict], source: str) -> None:
 
 
 # ---- KPIs (Summary tab, matched by label)
-S = {r[0]: r[1] for r in wb["Summary"].iter_rows(min_row=4, max_row=40, values_only=True) if r[0]}
+S = {r[0]: r[1] for r in wb["Summary"].iter_rows(min_row=4, max_row=120, values_only=True) if r[0]}
 inp = {r[0]: r[1] for r in wb["Inputs"].iter_rows(min_row=5, max_row=40, values_only=True) if r[0]}
 k = {
     "rev_per_q": S["Blended revenue per qualified meeting"],
@@ -44,7 +44,9 @@ k = {
     "be_q_day": S["Break-even QUALIFIED meetings / day (roster mix)"],
     "be_booked_day": S["Break-even BOOKED meetings / day (roster mix)"],
     "payback_target": S["Hiring-fee payback, LATAM full-time, at target (month #)"],
-    "act_q_day": S["Actual qualified meetings per active setter-day (window)"],
+    "act_q_day": S["Actual qualified meetings per day worked (window)"],
+    "act_b_day": S["Actual booked meetings per day worked (window)"],
+    "win_xfers": S["Live transfers in window (setters, to GreenBridge)"],
     "payback_actual": S["Hiring-fee payback, LATAM full-time, at ACTUAL productivity (month #)"],
     "p0_cap": S["P0-P4 supply: qualified meetings / month available"],
     "p0_runout": S["P0-P4 ladder fully worked at (setters)"],
@@ -141,7 +143,8 @@ for r in range(hdr + 1, v.max_row + 1):
                  "cm_modeled": num(g(10), 0), "gap": num(g(11), 0), "status": g(12) or "",
                  "margin_q": num(g(13), 3) if isinstance(g(13), (int, float)) else None,
                  "revenue_all": num(g(14), 0), "cm_all": num(g(15), 0),
-                 "margin_all": num(g(16), 3) if isinstance(g(16), (int, float)) else None})
+                 "margin_all": num(g(16), 3) if isinstance(g(16), (int, float)) else None,
+                 "booked_per_day": num(g(17)), "transfers": g(18) or 0})
 dump("setters", rows, "Actual_vs_Model tab (ranked view)")
 
 # ---- assumptions (Inputs: scalars + pay types)
