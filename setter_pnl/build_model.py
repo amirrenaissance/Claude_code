@@ -104,7 +104,11 @@ SCALARS: list[tuple] = [
     ("SEC", "Live transfers (to GreenBridge)"),
     ("in_XferPrice", "Price per live transfer", 170, "$/transfer", "CONFIRMED", "Amir 2026-11-19: $170 per live transfer", USD),
     ("in_XferComm", "Setter commission per live transfer", 5, "$/transfer", "GUESS", "Assumed same as a qualified meeting", USD2),
-    ("in_XferPerDay", "Live transfers per setter per day", 0.5, "per day", "DERIVED", "GoFunnel: 20 successful setter transfers Nov 18-19 (~19 setters x 2 days). Nov 11-13 pace was ~0.2/day", "0.00"),
+    ("in_XferShare", "Share of booked outcomes that become a live transfer (instead of a meeting)", 0.19, "%", "DERIVED", "Nov 18-19: 20 successful transfers vs ~87 meetings booked (portal, excl. transfers also logged there). Two days only", PCT),
+    ("in_RevBookedQ", "Revenue per booked outcome, qualified meetings billed", "=(1-in_XferShare)*in_QualRate*in_RevQEff+in_XferShare*in_XferPrice", "$/outcome", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
+    ("in_RevBookedAll", "Revenue per booked outcome, every booking billed", "=(1-in_XferShare)*in_RevQ+in_XferShare*in_XferPrice", "$/outcome", "CALC", "", USD2),
+    ("in_CommBooked", "Commission per booked outcome", "=(1-in_XferShare)*in_QualRate*in_Commission+in_XferShare*in_XferComm", "$/outcome", "CALC", "", USD2),
+    ("in_PosWeek", "Funding positive replies with a phone entering the dialer per week", 3700, "per week", "ACTUAL", "ClickHouse: 3,699 leads added to the positive-reply list Nov 10-14", NUM0),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
     ("in_Handled", "Live conversations handled per setter per day", 38, "convs/day", "DERIVED", "ClickHouse: 5,127 agent-handled funding calls Nov 10-18 / ~133 setter-days (19 setters x 7 weekdays)", NUM0),
     ("in_MeasDays", "Selling days in the ladder measurement window", 7, "days", "ACTUAL", "Nov 10-18 weekdays", NUM0),
@@ -341,9 +345,9 @@ LINES = [
     ("Qualified meetings / month", "={c}5*{c}6", NUM0),
     ("Booked meetings / month (at qualified rate)", "=IFERROR({c}7/in_QualRate,0)", NUM0),
     ("Revenue per qualified meeting", "=in_RevQEff", USD2),
-    ("REVENUE (meetings + live transfers)", "={c}7*{c}9+in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("REVENUE (booked outcomes x revenue per outcome)", "={c}8*in_RevBookedQ", USD),
     ("Base pay", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))", USD),
-    ("Commission (meetings + transfers)", "={c}7*in_Commission+in_XferPerDay*in_Days*in_XferComm", USD),
+    ("Commission (meetings + transfers)", "={c}8*in_CommBooked", USD),
     ("GoFunnel.ai", "=in_GoFunnel", USD),
     ("Trainual", "=in_Trainual", USD),
     ("Phone numbers", "=in_Phone", USD),
@@ -355,15 +359,15 @@ LINES = [
     ("Cost per qualified meeting", "=IFERROR({c}18/{c}7,0)", USD2),
     ("", None, None),
     ("IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue: booked meetings x price + live transfers", "={c}8*in_RevQ+in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("Revenue: booked outcomes x revenue per outcome (all billed)", "={c}8*in_RevBookedAll", USD),
     ("Contribution margin (all billed)", "={c}24-{c}18", USD),
     ("Contribution margin % (all billed)", "=IFERROR({c}25/{c}24,0)", PCT),
     ("", None, None),
     ("Hiring fee shown two ways - month of hire (ramp month 1)", None, None),
     ("(a) Fee EXPENSED in month 1: contribution margin",
-     "={c}9*in_Target*in_Ramp1*in_Days-({c}11+in_Target*in_Ramp1*in_Days*in_Commission+in_SeatCost+in_Fee)", USD),
+     "={c}8*in_Ramp1*(in_RevBookedQ-in_CommBooked)-({c}11+in_SeatCost+in_Fee)", USD),
     ("(b) Fee AMORTIZED: contribution margin month 1",
-     "={c}9*in_Target*in_Ramp1*in_Days-({c}11+in_Target*in_Ramp1*in_Days*in_Commission+in_SeatCost+in_Fee/in_Tenure)", USD),
+     "={c}8*in_Ramp1*(in_RevBookedQ-in_CommBooked)-({c}11+in_SeatCost+in_Fee/in_Tenure)", USD),
 ]
 for i, (lab, f, fmt) in enumerate(LINES, start=5):
     wsS.cell(i, 1, lab)
@@ -386,15 +390,15 @@ wsB["A1"] = "Break-even meetings per setter per day"; wsB["A1"].font = F_TITLE
 wsB["A2"] = "Qualified meetings/day at which contribution margin = 0 (hiring fee amortized)."; wsB["A2"].font = F_NOTE
 header(wsB, 4, ["Line"] + [p[0] for p in PAY] + ["Blended (roster mix)"])
 BE = [
-    ("Fixed cost / month (base + seat + hiring amortized), net of live-transfer margin", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))+in_SeatCost+in_Fee/in_Tenure-in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)", USD),
-    ("Margin per qualified meeting (revenue - commission)", "=in_RevQEff-in_Commission", USD2),
-    ("Break-even QUALIFIED meetings / month", "=IFERROR({c}5/{c}6,0)", NUM1),
-    ("Break-even QUALIFIED meetings / day", "=IFERROR({c}7/in_Days,0)", "0.00"),
-    ("Break-even BOOKED meetings / day (at qualified rate)", "=IFERROR({c}8/in_QualRate,0)", "0.00"),
+    ("Fixed cost / month (base + seat + hiring amortized)", "=INDEX(PayBase,MATCH({c}$4,PayNames,0))+in_SeatCost+in_Fee/in_Tenure", USD),
+    ("Margin per booked outcome (meeting or transfer, after commission)", "=in_RevBookedQ-in_CommBooked", USD2),
+    ("Break-even BOOKED outcomes / month", "=IFERROR({c}5/{c}6,0)", NUM1),
+    ("Break-even QUALIFIED meetings / day (+ transfers in the measured mix)", "=IFERROR({c}9*(1-in_XferShare)*in_QualRate,0)", "0.00"),
+    ("Break-even BOOKED outcomes / day", "=IFERROR({c}7/in_Days,0)", "0.00"),
     ("Target qualified / day", "=in_Target", NUM1),
     ("Headroom: target / break-even", "=IFERROR({c}10/{c}8,0)", '0.0"x"'),
-    ("IF EVERY BOOKING BILLS: break-even BOOKED meetings / day", "=IFERROR({c}5/(in_Days*(in_RevQ-in_Commission*in_QualRate)),0)", "0.00"),
-    ("IF EVERY BOOKING BILLS: same, in QUALIFIED meetings / day", "=IFERROR({c}12*in_QualRate,0)", "0.00"),
+    ("IF EVERY BOOKING BILLS: break-even BOOKED outcomes / day", "=IFERROR({c}5/(in_Days*(in_RevBookedAll-in_CommBooked)),0)", "0.00"),
+    ("IF EVERY BOOKING BILLS: same, in QUALIFIED meetings / day", "=IFERROR({c}12*(1-in_XferShare)*in_QualRate,0)", "0.00"),
 ]
 for i, (lab, f, fmt) in enumerate(BE, start=5):
     wsB.cell(i, 1, lab)
@@ -426,7 +430,7 @@ for m in range(1, 25):
     for j in range(NP):
         cm_col = 3 + j; cum_col = 3 + NP + j
         q = f"in_Target*$B{i}*in_Days"
-        wsP.cell(i, cm_col, f"={q}*(in_RevQEff-in_Commission)+$B{i}*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)-INDEX(PayBase,{j+1})-in_SeatCost").number_format = USD
+        wsP.cell(i, cm_col, f"={q}/in_QualRate*(in_RevBookedQ-in_CommBooked)-INDEX(PayBase,{j+1})-in_SeatCost").number_format = USD
         prev = f"+{L(cum_col)}{i-1}" if m > 1 else "-in_Fee"
         wsP.cell(i, cum_col, f"={L(cm_col)}{i}{prev}").number_format = USD
 wsP.cell(30, 1, "PAYBACK MONTH").font = F_B
@@ -444,7 +448,7 @@ for k in (ca, cu):
     wsP.cell(4, k).font, wsP.cell(4, k).fill = F_H, PatternFill("solid", fgColor="7F6000")
 for m in range(1, 25):
     i = 4 + m
-    wsP.cell(i, ca, f"=MIN(in_Target,in_ActQPD)*$B{i}*in_Days*(in_RevQEff-in_Commission)+$B{i}*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)"
+    wsP.cell(i, ca, f"=MIN(in_Target/in_QualRate,out_ActBPD)*$B{i}*in_Days*(in_RevBookedQ-in_CommBooked)"
                     f"-INDEX(PayBase,{lat+1})-in_SeatCost").number_format = USD
     prev = f"+{L(cu)}{i-1}" if m > 1 else "-in_Fee"
     wsP.cell(i, cu, f"={L(ca)}{i}{prev}").number_format = USD
@@ -474,12 +478,12 @@ TL = [
     ("Setter-months available", "={c}5", NUM1),
 ] + [tier_row(k) for k in range(6)] + [
     ("Booked meetings from P0-P4", "=SUM({c}8:{c}13)", NUM0),
-    ("Qualified meetings from P0-P4", "={c}14*in_QualRate", NUM0),
+    ("Qualified meetings from P0-P4 (live transfers excluded)", "={c}14*(1-in_XferShare)*in_QualRate", NUM0),
     ("Setter-months left after P0-P4 is fully worked", "=MAX(0,{c}7-SUM(Lad_Need))", NUM1),
     ("A. POSITIVE-REPLY LADDER ONLY, QUALIFIED MEETINGS BILLED", None, None),
-    ("Revenue (meetings + live transfers)", "={c}15*in_RevQEff+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("Revenue (meetings + live transfers)", "={c}14*in_RevBookedQ", USD),
     ("Base pay", "={c}5*{c}6", USD),
-    ("Commission (meetings + transfers)", "={c}15*in_Commission+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferComm", USD),
+    ("Commission (meetings + transfers)", "={c}14*in_CommBooked", USD),
     ("GoFunnel + Trainual + phones + mgmt", "={c}5*in_SeatCost", USD),
     ("Hiring fee (amortized; = annual churn re-hiring)", "={c}5*in_Fee/in_Tenure", USD),
     ("Total cost", "=SUM({c}19:{c}22)", USD),
@@ -490,16 +494,16 @@ TL = [
     ("Cold booked meetings", "={c}16*in_ColdBookDay*in_Days", NUM0),
     ("Cold qualified meetings", "={c}28*in_QualRate", NUM0),
     ("Cold data cost", "={c}28*in_ColdNums*in_ColdPerNum", USD),
-    ("Revenue (meetings + live transfers)", "=({c}15+{c}29)*in_RevQEff+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("Revenue (meetings + live transfers)", "={c}14*in_RevBookedQ+{c}29*in_RevQEff", USD),
     ("Total cost (ladder costs + extra commission + cold data)", "={c}23+{c}29*in_Commission+{c}30", USD),
     ("CONTRIBUTION MARGIN (with cold data)", "={c}31-{c}32", USD),
     ("CM per setter", "=IFERROR({c}33/{c}5,0)", USD),
     ("CM %", "=IFERROR({c}33/{c}31,0)", PCT),
     ("C. IF EVERY BOOKING BILLS (commission still on qualified only)", None, None),
-    ("Revenue, ladder only (booked x price + live transfers)", "={c}14*in_RevQ+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("Revenue, ladder only (all bookings and transfers billed)", "={c}14*in_RevBookedAll", USD),
     ("CONTRIBUTION MARGIN, ladder only (all billed)", "={c}37-{c}23", USD),
     ("CM %, ladder only (all billed)", "=IFERROR({c}38/{c}37,0)", PCT),
-    ("Revenue with cold data (booked x price + live transfers)", "=({c}14+{c}28)*in_RevQ+MIN({c}5,SUM(Lad_Need))*in_XferPerDay*in_Days*in_XferPrice", USD),
+    ("Revenue with cold data (all bookings and transfers billed)", "={c}14*in_RevBookedAll+{c}28*in_RevQ", USD),
     ("CONTRIBUTION MARGIN with cold data (all billed)", "={c}40-{c}32", USD),
     ("CM % with cold data (all billed)", "=IFERROR({c}41/{c}40,0)", PCT),
     ("", None, None),
@@ -555,14 +559,13 @@ for i, n in enumerate(NS, start=11):
     x = f"($A{i}-Lad_Cum)"
     a_ = f"((ABS({x})+{x})/2)"
     wsU.cell(i, 2, f"=SUMPRODUCT(Lad_Prod*in_Days*(({a_}+Lad_Need-ABS({a_}-Lad_Need))/2))").number_format = NUM0
-    wsU.cell(i, 3, f"=B{i}*in_QualRate").number_format = NUM0
+    wsU.cell(i, 3, f"=B{i}*(1-in_XferShare)*in_QualRate").number_format = NUM0
     left = f"MAX(0,A{i}-SUM(Lad_Need))"
     wsU.cell(i, 4, f"={left}*in_ColdBookDay*in_Days*in_QualRate").number_format = NUM0
     wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
     fixed = f"A{i}*(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
-    xt = f"MIN(A{i},SUM(Lad_Need))*in_XferPerDay*in_Days*(in_XferPrice-in_XferComm)"
-    wsU.cell(i, 6, f"=C{i}*(in_RevQEff-in_Commission)+{xt}-{fixed}").number_format = USD
-    wsU.cell(i, 7, f"=(C{i}+D{i})*(in_RevQEff-in_Commission)+{xt}-E{i}-{fixed}").number_format = USD
+    wsU.cell(i, 6, f"=B{i}*(in_RevBookedQ-in_CommBooked)-{fixed}").number_format = USD
+    wsU.cell(i, 7, f"=F{i}+D{i}*(in_RevQEff-in_Commission)-E{i}").number_format = USD
     wsU.cell(i, 8, f"=F{i}/A{i}").number_format = USD
     wsU.cell(i, 9, f'=IF(E{i}>0,"COLD DATA ON","P0-P4 only")')
 end = 10 + len(NS)
@@ -570,6 +573,57 @@ wsU.conditional_formatting.add(f"A11:I{end}", FormulaRule(formula=["$E11>0"], fi
 wsU.conditional_formatting.add(f"F11:H{end}", CellIsRule(operator="lessThan", formula=["0"], font=Font(color="C00000")))
 widths(wsU, {"A": 54, "B": 14, "C": 13, "D": 13, "E": 14, "F": 14, "G": 18, "H": 18, "I": 15})
 wsU.freeze_panes = "A11"
+
+# ============================================================================ GROWTH
+wsG = wb.create_sheet("Growth")
+wsG["A1"] = "What has to be true to grow to 25, 50, 75 and 100 setters"; wsG["A1"].font = F_TITLE
+wsG["A2"] = ("Path A: grow positive replies so every setter works the ladder at today's productivity. "
+             "Path B: keep today's replies and put every setter beyond the ladder on purchased cold data.")
+wsG["A2"].font = F_NOTE
+GN = ["=SUM(Lad_Need)", 25, 50, 75, 100]
+header(wsG, 4, ["Line (monthly)", "Ladder full (today)", "25", "50", "75", "100"])
+FIX = "(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
+def ladder_booked(c):
+    x = f"({c}5-Lad_Cum)"; a_ = f"((ABS({x})+{x})/2)"
+    return f"SUMPRODUCT(Lad_Prod*in_Days*(({a_}+Lad_Need-ABS({a_}-Lad_Need))/2))"
+GL = [
+    ("Setters", None, NUM1),
+    ("Setters today's positive replies can keep busy (ladder)", "=SUM(Lad_Need)", NUM1),
+    ("Setters beyond today's ladder", "=MAX(0,{c}5-{c}6)", NUM1),
+    ("PATH A. GROW POSITIVE REPLIES (same tier mix and productivity)", None, None),
+    ("Positive-reply volume needed vs today", "={c}5/{c}6", '0.0"x"'),
+    ("Funding positive replies (with phone) needed per week", "=in_PosWeek*{c}9", NUM0),
+    ("Team contribution margin, qualified meetings billed", "={c}5*(SUM(Lad_Avail)/{c}6*(in_RevBookedQ-in_CommBooked)-" + FIX + ")", USD),
+    ("Team contribution margin, every booking billed", "={c}5*(SUM(Lad_Avail)/{c}6*(in_RevBookedAll-in_CommBooked)-" + FIX + ")", USD),
+    ("PATH B. KEEP TODAY'S REPLIES, BUY COLD DATA FOR THE REST", None, None),
+    ("Break-even cold booked meetings per setter-day, qualified billed",
+     "=IFERROR(" + FIX + "/(in_Days*(in_QualRate*(in_RevQEff-in_Commission)-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
+    ("Break-even cold booked meetings per setter-day, every booking billed",
+     "=IFERROR(" + FIX + "/(in_Days*(in_RevQ-in_QualRate*in_Commission-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
+    ("Cold numbers to buy per month (at the assumed cold booking rate)", "={c}7*in_ColdBookDay*in_Days*in_ColdNums", NUM0),
+    ("Cold data cost per month", "={c}16*in_ColdPerNum", USD),
+    ("Team contribution margin, qualified billed (cold at assumed rate)",
+     "=__LB__*(in_RevBookedQ-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_QualRate*(in_RevQEff-in_Commission)-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
+    ("Team contribution margin, every booking billed (cold at assumed rate)",
+     "=__LB__*(in_RevBookedAll-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_RevQ-in_QualRate*in_Commission-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
+]
+for i, (lab, f, fmt) in enumerate(GL, start=5):
+    wsG.cell(i, 1, lab)
+    if lab.startswith("PATH"):
+        wsG.cell(i, 1).font = F_B
+        for k in range(1, 7): wsG.cell(i, k).fill = FILL_SEC
+        continue
+    for k in range(5):
+        col = L(2 + k)
+        v = GN[k] if i == 5 else f.format(c=col).replace("__LB__", "(" + ladder_booked(col) + ")")
+        c = wsG.cell(i, 2 + k, v); c.number_format = fmt
+        if i == 5 and k > 0: c.font = F_IN
+        if "Team contribution" in lab: c.font = F_B; c.fill = FILL_KPI
+for rr in (11, 12, 18, 19):
+    wsG.conditional_formatting.add(f"B{rr}:F{rr}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
+    wsG.conditional_formatting.add(f"B{rr}:F{rr}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
+name("out_BEColdQ", "Growth", "$B$14"); name("out_BEColdAll", "Growth", "$B$15")
+widths(wsG, {"A": 66, "B": 18, "C": 14, "D": 14, "E": 14, "F": 14})
 
 # ============================================================================ SENSITIVITY
 wsX = wb.create_sheet("Sensitivity")
@@ -762,6 +816,8 @@ KP = [
     ("Setters with positive CM (all billed)", "=out_ActProfitableAll", NUM0),
     ("Break-even BOOKED meetings / day, roster mix (all billed)", "=out_BE_AllBooked", "0.00"),
     ("Team CM / month, current team, P0-P4 ladder only (all billed)", "=out_TeamCMAll_Now", USD),
+    ("Break-even cold booked meetings per setter-day (qualified billed)", "=out_BEColdQ", "0.00"),
+    ("Break-even cold booked meetings per setter-day (every booking billed)", "=out_BEColdAll", "0.00"),
     ("Change in CM from adding 12 setters, P0-P4 ladder only (all billed)", "=out_TeamCMAll_Delta", USD),
     ("Change in CM from adding 12 setters, with purchased cold data (all billed)", "=out_TeamCMcAll_Delta", USD),
 ]

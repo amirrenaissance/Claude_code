@@ -34,7 +34,7 @@ def dump(name: str, rows: list[dict], source: str) -> None:
 
 # ---- KPIs (Summary tab, matched by label)
 S = {r[0]: r[1] for r in wb["Summary"].iter_rows(min_row=4, max_row=120, values_only=True) if r[0]}
-inp = {r[0]: r[1] for r in wb["Inputs"].iter_rows(min_row=5, max_row=40, values_only=True) if r[0]}
+inp = {r[0]: r[1] for r in wb["Inputs"].iter_rows(min_row=5, max_row=60, values_only=True) if r[0]}
 k = {
     "rev_per_q": S["Blended revenue per qualified meeting"],
     "qual_rate": S["Qualified rate (booked -> qualified, since mandate)"],
@@ -73,6 +73,12 @@ k = {
     "win_start": str(inp["Actuals window start (last 60 days)"])[:10],
     "win_end": str(inp["Actuals window end (data through)"])[:10],
     "data_start": "2026-10-01",
+    "xfer_share": inp["Share of booked outcomes that become a live transfer (instead of a meeting)"],
+    "rev_outcome_q": inp["Revenue per booked outcome, qualified meetings billed"],
+    "rev_outcome_all": inp["Revenue per booked outcome, every booking billed"],
+    "pos_week": inp["Funding positive replies with a phone entering the dialer per week"],
+    "be_cold_q": S["Break-even cold booked meetings per setter-day (qualified billed)"],
+    "be_cold_all": S["Break-even cold booked meetings per setter-day (every booking billed)"],
 }
 dump("kpis", [{kk: num(v) for kk, v in k.items()}], "Summary + Inputs tabs")
 
@@ -99,6 +105,17 @@ for i, c in enumerate(range(2, 10)):
                  "revenue_cold_all": num(v(40), 0), "cm_cold_all": num(v(41), 0),
                  **{f"tier{k}": num(v(8 + k), 0) for k in range(6)}})
 dump("team", rows, "Team_PnL tab")
+
+# ---- growth (Growth tab)
+g_ = wb["Growth"]
+labels_g = ["Ladder full (today)", "25", "50", "75", "100"]
+rows = []
+for k_, c in enumerate(range(2, 7)):
+    v = lambda r: g_.cell(r, c).value
+    rows.append({"scenario": labels_g[k_], "setters": num(v(5), 1), "beyond": num(v(7), 1), "pos_multiple": num(v(9), 2),
+                 "pos_week": num(v(10), 0), "cm_a_q": num(v(11), 0), "cm_a_all": num(v(12), 0),
+                 "cold_cost": num(v(17), 0), "cm_b_q": num(v(18), 0), "cm_b_all": num(v(19), 0)})
+dump("growth", rows, "Growth tab")
 
 # ---- supply ladder (Inputs tab ladder table)
 wi = wb["Inputs"]
