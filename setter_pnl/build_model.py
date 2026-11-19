@@ -98,17 +98,24 @@ SCALARS: list[tuple] = [
     ("in_GoFunnel", "GoFunnel.ai licence", 150, "$/mo", "CONFIRMED", "Brief", USD),
     ("in_Trainual", "Trainual seat", 8, "$/mo", "GUESS", "", USD),
     ("in_Phone", "Phone numbers / caller ID", 10, "$/mo", "GUESS", "May already be inside GoFunnel", USD),
-    ("in_Mgmt", "Management overhead allocation (Julian, QA, payroll)", 350, "$/mo", "GUESS", "Allocation per seat; no cost data found", USD),
-    ("in_SeatCost", "Total per-seat cost (excl. base, commission, hiring)", "=in_GoFunnel+in_Trainual+in_Phone+in_Mgmt", "$/mo", "CALC", "", USD),
+    ("in_SeatVar", "Per-seat tools (GoFunnel + Trainual + phones)", "=in_GoFunnel+in_Trainual+in_Phone", "$/mo", "CALC", "", USD),
+    ("in_ExecAlloc", "Management: share of Amir's salary charged to the floor", 5000, "$/mo", "CONFIRMED", "Ido 2026-11-19 meeting: assign $5,000/month of Amir's salary", USD),
+    ("in_MgrCost", "Management: floor manager salary (Julian)", 8000, "$/mo", "GUESS", "Ido 2026-11-19: 'let's say Julian's making eight grand'. Confirm actual", USD),
+    ("in_MgrSpan", "Setters per floor manager (a new manager every N setters)", 30, "setters", "GUESS", "Sliding scale: management cost steps up as the team grows", NUM0),
+    ("in_MgmtNow", "Management cost per month at today's headcount", "=in_ExecAlloc+in_MgrCost*CEILING(in_ActiveN/in_MgrSpan,1)", "$/mo", "CALC", "", USD),
+    ("in_Mgmt", "Management cost per setter at today's headcount", "=IFERROR(in_MgmtNow/in_ActiveN,0)", "$/mo", "CALC", "Falls as the team grows (spread over more setters)", USD),
+    ("in_SeatCost", "Total per-seat cost (excl. base, commission, hiring)", "=in_SeatVar+in_Mgmt", "$/mo", "CALC", "", USD),
     ("in_Commission", "Commission per qualified meeting", 5, "$/mtg", "CONFIRMED", "Julian, #ops-amir-julian 2026-11-15: from Nov, $5 per qualified meeting (held no longer matters). Hekmate has an $8 tier (not modelled)", USD2),
     ("SEC", "Live transfers (to GreenBridge)"),
-    ("in_XferPrice", "Price per live transfer", 170, "$/transfer", "CONFIRMED", "Amir 2026-11-19: $170 per live transfer", USD),
+    ("in_XferPremium", "Live transfer premium over a meeting", 0.20, "%", "CONFIRMED", "Ido 2026-11-19: live transfer = meeting price + 20%", PCT),
+    ("in_XferPrice", "Price per live transfer", "=140*(1+in_XferPremium)", "$/transfer", "CALC", "$140 average meeting price + 20%", USD),
     ("in_XferComm", "Setter commission per live transfer", 5, "$/transfer", "GUESS", "Assumed same as a qualified meeting", USD2),
     ("in_XferShare", "Live transfers as a share of all outcomes (transfers + meetings)", 0.20, "%", "GUESS", "PROJECTION (Amir 2026-11-19): mix depends on partner live-transfer availability, setter skill and prospect preference. Applies to warm and cold leads. Transfers come on top of meetings. Nov 18-19 actual: 19%", PCT),
     ("in_XferPerMtg", "Live transfers per booked meeting", "=in_XferShare/(1-in_XferShare)", "per mtg", "CALC", "20/80 mix = 1 transfer for every 4 meetings", "0.00"),
     ("in_RevBookedQ", "Revenue per booked meeting incl. its transfers, qualified meetings billed", "=in_QualRate*in_RevQEff+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
     ("in_RevBookedAll", "Revenue per booked meeting incl. its transfers, every booking billed", "=in_RevQ+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "", USD2),
     ("in_CommBooked", "Commission per booked meeting incl. its transfers", "=in_QualRate*in_Commission+in_XferPerMtg*in_XferComm", "$/mtg", "CALC", "", USD2),
+    ("in_OppCost", "Email & GTM cost per opportunity (charged per booked meeting or transfer)", 80, "$/opp", "GUESS", "Ido 2026-11-19: cost per opportunity ~$70-90. Confirm definition (positive reply vs booked meeting) and the month-to-date figure", USD),
     ("in_Incremental", "Share of setter meetings that are net new (email would not have booked them)", 0.63, "%", "DERIVED", "ClickHouse, Nov 10-14 positives: reached leads book 13.3% (10.0% call + 3.3% email) vs 7.0% email-only for leads setters never reached. Upper-end estimate; a holdout test would measure it", PCT),
     ("in_PosWeek", "Funding positive replies with a phone entering the dialer per week", 3700, "per week", "ACTUAL", "ClickHouse: 3,699 leads added to the positive-reply list Nov 10-14", NUM0),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
@@ -172,18 +179,18 @@ section(wsI, r, "Partner pricing (revenue per billable meeting)", 9); r += 1
 header(wsI, r, ["Partner", "Billing basis (Booked/Held)", "Price $", "Show rate", "Eff. $ per billable booking",
                 "Qualified bookings in window", "Mix share", "Status", "Source / note"]); r += 1
 PARTNERS = [
-    ("GoQualifi", "Booked", 155, 0.395, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Llama", "Booked", 155, 0.649, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Big Think Capital", "Booked", 155, 0.668, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("GreenBridge Capital", "Booked", 155, 0.553, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Essential Capital", "Booked", 155, 0.685, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Direct Funding Now", "Booked", 155, 0.867, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Sunlight Capital", "Booked", 155, 0.824, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Fresh Funding", "Booked", 155, 0.778, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("Mode", "Booked", 155, 0.978, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
-    ("License Your Data", "Booked", 155, 0.60, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("GoQualifi", "Booked", 140, 0.395, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Llama", "Booked", 140, 0.649, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Big Think Capital", "Booked", 140, 0.668, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("GreenBridge Capital", "Booked", 140, 0.553, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Essential Capital", "Booked", 140, 0.685, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Direct Funding Now", "Booked", 140, 0.867, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Sunlight Capital", "Booked", 140, 0.824, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Fresh Funding", "Booked", 140, 0.778, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("Mode", "Booked", 140, 0.978, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
+    ("License Your Data", "Booked", 140, 0.60, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
     ("Collins", "Held", 260, 0.619, "CONFIRMED", "Oscar 2026-10-27: 'we only bill $260 per held meeting'. Show 61.9%"),
-    ("SBG Lending", "Booked", 155, 0.60, "CONFIRMED", "Amir 2026-11-18: we charge $155 per meeting"),
+    ("SBG Lending", "Booked", 140, 0.60, "CONFIRMED", "Ido 2026-11-19: about $140 per meeting on average"),
 ]
 part_first = r
 for p, basis, price, show, status, src in PARTNERS:
@@ -198,7 +205,7 @@ for p, basis, price, show, status, src in PARTNERS:
 # catch-all row
 wsI.cell(r, 1, "Other (unlisted partners)")
 wsI.cell(r, 2, "Booked").font = F_IN
-c = wsI.cell(r, 3, 155); c.font = F_IN; c.number_format = USD
+c = wsI.cell(r, 3, 140); c.font = F_IN; c.number_format = USD
 c = wsI.cell(r, 4, 0.6); c.font = F_IN; c.number_format = PCT
 wsI.cell(r, 5, f'=C{r}*IF(B{r}="Held",D{r},1)').number_format = USD
 wsI.cell(r, 6, f"=COUNTIFS(act_q,1,act_inwin,1)-SUM(F{part_first}:F{r-1})")
@@ -303,10 +310,10 @@ ROSTER = [
     ("elias", "Funding", "Egypt (NAC)", None, None, "Y", ""),
     ("jose", "Funding", "LATAM full-time", None, None, "Y", "Contract Oct 6"),
     ("brian", "Funding", "LATAM full-time", None, None, "Y", "Contract Oct 6"),
-    ("steve", "Funding", "LATAM full-time", None, None, "Y", ""),
-    ("jacobo", "Funding", "LATAM full-time", None, None, "Y", "Moved Pre-IPO -> Funding Nov 4"),
+    ("steve", "Funding", "LATAM full-time", None, None, "N", "Terminated (Nov 19)"),
+    ("jacobo", "Pre-IPO", "LATAM full-time", None, None, "N", "Back on pre-IPO (moves between campaigns): excluded from funding floor"),
     ("alejandro", "Data Broker", "LATAM full-time", 2800, 10, "N", "Data Broker campaign: separate P&L, excluded from the funding setter floor (Amir 11/19)"),
-    ("oscarduran", "Funding", "LATAM full-time", None, None, "Y", "In Caller QA only (not in Scorecard data); pay type GUESSED"),
+    ("oscarduran", "Funding", "LATAM full-time", None, None, "N", "Business development, not a funding setter (Amir 11/19); candidate for the cold-calling test"),
     ("pablo", "Data Broker", "Pipeline manager", None, 0, "N", "Runs the Data Broker team (manager, not a setter): excluded from setter P&L and headcount"),
     ("marwan", "Pre-IPO", "Egypt (NAC)", None, None, "N", "Terminated"),
 ] + [(n, "Funding", "LATAM full-time", None, None, "Y", "Nov 13 class; pay type GUESSED")
@@ -353,7 +360,7 @@ LINES = [
     ("GoFunnel.ai", "=in_GoFunnel", USD),
     ("Trainual", "=in_Trainual", USD),
     ("Phone numbers", "=in_Phone", USD),
-    ("Management overhead", "=in_Mgmt", USD),
+    ("Management (today's cost spread over today's setters)", "=in_Mgmt", USD),
     ("Hiring fee (amortized over tenure)", "=in_Fee/in_Tenure", USD),
     ("TOTAL COST", "=SUM({c}11:{c}17)", USD),
     ("CONTRIBUTION MARGIN", "={c}10-{c}18", USD),
@@ -486,7 +493,7 @@ TL = [
     ("Revenue (meetings + live transfers)", "={c}14*in_RevBookedQ", USD),
     ("Base pay", "={c}5*{c}6", USD),
     ("Commission (meetings + transfers)", "={c}14*in_CommBooked", USD),
-    ("GoFunnel + Trainual + phones + mgmt", "={c}5*in_SeatCost", USD),
+    ("Tools + management (sliding scale)", "={c}5*in_SeatVar+in_ExecAlloc+in_MgrCost*CEILING({c}5/in_MgrSpan,1)", USD),
     ("Hiring fee (amortized; = annual churn re-hiring)", "={c}5*in_Fee/in_Tenure", USD),
     ("Total cost", "=SUM({c}19:{c}22)", USD),
     ("CONTRIBUTION MARGIN (ladder only)", "={c}18-{c}23", USD),
@@ -568,7 +575,7 @@ for i, n in enumerate(NS, start=11):
     left = f"MAX(0,A{i}-SUM(Lad_Need))"
     wsU.cell(i, 4, f"={left}*in_ColdBookDay*in_Days*in_QualRate").number_format = NUM0
     wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
-    fixed = f"A{i}*(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
+    fixed = f"(A{i}*(in_BlendBase+in_SeatVar+in_Fee/in_Tenure)+in_ExecAlloc+in_MgrCost*CEILING(A{i}/in_MgrSpan,1))"
     wsU.cell(i, 6, f"=B{i}*(in_RevBookedQ-in_CommBooked)-{fixed}").number_format = USD
     wsU.cell(i, 7, f"=F{i}+D{i}/in_QualRate*(in_RevBookedQ-in_CommBooked)-E{i}").number_format = USD
     wsU.cell(i, 8, f"=F{i}/A{i}").number_format = USD
@@ -587,7 +594,7 @@ wsG["A2"] = ("Path A: grow positive replies so every setter works the ladder at 
 wsG["A2"].font = F_NOTE
 GN = ["=SUM(Lad_Need)", 25, 50, 75, 100]
 header(wsG, 4, ["Line (monthly)", "Ladder full (today)", "25", "50", "75", "100"])
-FIX = "(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
+FIX = "(in_BlendBase+in_SeatVar+in_Fee/in_Tenure+(in_ExecAlloc+in_MgrCost*CEILING({c}5/in_MgrSpan,1))/{c}5)"
 def ladder_booked(c):
     x = f"({c}5-Lad_Cum)"; a_ = f"((ABS({x})+{x})/2)"
     return f"SUMPRODUCT(Lad_Prod*in_Days*(({a_}+Lad_Need-ABS({a_}-Lad_Need))/2))"
@@ -645,14 +652,14 @@ for j, xs in enumerate(XS):
         for k in range(5):
             col = L(2 + k); m = m_s(f"$G${rr_}")
             if rr_ == ra:
-                f_ = f"={col}5*(SUM(Lad_Avail)/{col}6*{m}-" + FIX + ")"
+                f_ = f"={col}5*(SUM(Lad_Avail)/{col}6*{m}-" + FIX.replace("{c}", col) + ")"
             else:
-                f_ = (f"=({ladder_booked(col)})*{m}+{col}7*in_ColdBookDay*in_Days*({m}-in_ColdNums*in_ColdPerNum)-{col}5*" + FIX)
+                f_ = (f"=({ladder_booked(col)})*{m}+{col}7*in_ColdBookDay*in_Days*({m}-in_ColdNums*in_ColdPerNum)-{col}5*" + FIX.replace("{c}", col))
             wsG.cell(rr_, 2 + k, f_).number_format = USD
     rc = r0 + 2 * len(XS) + j
     wsG.cell(rc, 1, f"Break-even cold booked meetings per setter-day at {xs:.0%} transfers")
     c = wsG.cell(rc, 7, xs); c.font = F_IN; c.number_format = "0%"
-    wsG.cell(rc, 2, "=IFERROR(" + FIX + "/(in_Days*(" + m_s(f"$G${rc}") + "-in_ColdNums*in_ColdPerNum)),0)").number_format = "0.00"
+    wsG.cell(rc, 2, "=IFERROR(" + FIX.replace("{c}", "B") + "/(in_Days*(" + m_s(f"$G${rc}") + "-in_ColdNums*in_ColdPerNum)),0)").number_format = "0.00"
 end_ = r0 + 3 * len(XS) - 1
 wsG.conditional_formatting.add(f"B{r0}:F{r0 + 2*len(XS) - 1}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
 wsG.column_dimensions["G"].width = 14
@@ -697,7 +704,8 @@ VH = ["Setter", "Pay type", "Bookings", "Qualified (billable)", "False bookings"
       "Seat + overhead (prorated)", "Hiring fee (amortized, prorated)", "Total cost",
       "Contribution margin (actual)", "CM per selling day", "Revenue (modeled)", "Cost (modeled)",
       "Contribution margin (modeled)", "Actual - modeled", "False-booking status", "rank key", "Rank", "Paid days",
-      "Revenue (all billed)", "CM (all billed)", "CM % (qualified only)", "CM % (all billed)", "Days with a booking", "Booked / day worked", "Live transfers"]
+      "Revenue (all billed)", "CM (all billed)", "CM % (qualified only)", "CM % (all billed)", "Days with a booking", "Booked / day worked", "Live transfers",
+      "Fully loaded margin", "Setter cost per booked meeting", "Fully loaded cost per billable outcome"]
 header(wsV, 3, VH)
 ACTIVE_RR = [2 + k for k, x in enumerate(ROSTER) if x[5] == "Y"]  # roster rows of current setters
 N_ACT = len(ACTIVE_RR)
@@ -714,6 +722,9 @@ for k, rr in enumerate(ACTIVE_RR):
         7: (f"=IF(C{i}=0,0,NETWORKDAYS(IF(Roster!$K${rr}<>\"\",MAX(Roster!$K${rr},in_WinStart),"
             f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
         25: f"=SUMIFS(act_rev_all,act_setter,A{i},act_inwin,1)+AE{i}*in_XferPrice",
+        32: f"=O{i}-(C{i}+AE{i})*in_OppCost",
+        33: f"=IF(C{i}+AE{i}=0,0,N{i}/(C{i}+AE{i}))",
+        34: f'=IF(D{i}+AE{i}=0,"",(N{i}+(C{i}+AE{i})*in_OppCost)/(D{i}+AE{i}))',
         26: f"=Y{i}-N{i}",
         27: f'=IF(I{i}=0,"",O{i}/I{i})',
         28: f'=IF(Y{i}=0,"",Z{i}/Y{i})',
@@ -739,7 +750,7 @@ for k, rr in enumerate(ACTIVE_RR):
         22: f"=IF(G{i}=0,-1E9,O{i})+ROW()/1E6",
         23: f"=RANK(V{i},$V${first}:$V${last})",
     }
-    fm = {30: "0.00", 6: PCT, 8: "0.00", 25: USD, 26: USD, 27: PCT, 28: PCT, 9: USD, 10: USD, 11: USD, 12: USD, 13: USD, 14: USD, 15: USD,
+    fm = {32: USD, 33: USD2, 34: USD2, 30: "0.00", 6: PCT, 8: "0.00", 25: USD, 26: USD, 27: PCT, 28: PCT, 9: USD, 10: USD, 11: USD, 12: USD, 13: USD, 14: USD, 15: USD,
           16: USD, 17: USD, 18: USD, 19: USD, 20: USD}
     for col, f in F.items():
         c = wsV.cell(i, col, f)
@@ -749,7 +760,7 @@ wsV.conditional_formatting.add(f"O{first}:O{last}", CellIsRule(operator="lessTha
 wsV.conditional_formatting.add(f"O{first}:O{last}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
 tr = last + 1
 wsV.cell(tr, 1, "TEAM TOTAL").font = F_B
-for col in (3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 25, 26, 29, 31):
+for col in (3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 25, 26, 29, 31, 32):
     c = wsV.cell(tr, col, f"=SUM({L(col)}{first}:{L(col)}{last})"); c.font = F_B
     if col >= 9: c.number_format = USD
 name("out_ActTeamCM", "Actual_vs_Model", f"$O${tr}")
@@ -776,6 +787,11 @@ wsV.cell(tr + 4, 1, "Average booked meetings per day worked")
 c = wsV.cell(tr + 4, 3, f"=IFERROR(C{tr}/AC{tr},0)"); c.number_format = "0.00"; c.font = F_B
 name("out_ActBPD", "Actual_vs_Model", f"$C${tr+4}")
 name("out_ActXfers", "Actual_vs_Model", f"$AE${tr}")
+name("out_ActFullCM", "Actual_vs_Model", f"$AF${tr}")
+c = wsV.cell(tr, 33, f"=IFERROR(N{tr}/(C{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
+name("out_ActCostPerMtg", "Actual_vs_Model", f"$AG${tr}")
+c = wsV.cell(tr, 34, f"=IFERROR((N{tr}+(C{tr}+AE{tr})*in_OppCost)/(D{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
+name("out_ActFullCostPerQ", "Actual_vs_Model", f"$AH${tr}")
 name("in_ActQPD", "Actual_vs_Model", f"$C${tr+3}")
 
 # ranked view
@@ -783,16 +799,16 @@ rk = tr + 6
 wsV.cell(rk - 1, 1, "RANKED BY CONTRIBUTION MARGIN (actual, window)").font = F_TITLE
 RH = ["Rank", "Setter", "Pay type", "Active days", "Qualified / day", "Qualified rate", "Revenue",
       "Total cost", "CM (actual)", "CM (modeled)", "Actual - modeled", "False-booking status",
-      "CM % (qualified only)", "Revenue (all billed)", "CM (all billed)", "CM % (all billed)", "Booked / day worked", "Live transfers"]
+      "CM % (qualified only)", "Revenue (all billed)", "CM (all billed)", "CM % (all billed)", "Booked / day worked", "Live transfers", "Fully loaded margin", "Setter cost / booked mtg", "Fully loaded cost / billable"]
 header(wsV, rk, RH)
 src_cols = {2: "A", 3: "B", 4: "G", 5: "H", 6: "F", 7: "I", 8: "N", 9: "O", 10: "S", 11: "T", 12: "U",
-            13: "AA", 14: "Y", 15: "Z", 16: "AB", 17: "AD", 18: "AE"}
+            13: "AA", 14: "Y", 15: "Z", 16: "AB", 17: "AD", 18: "AE", 19: "AF", 20: "AG", 21: "AH"}
 for k in range(N_ACT):
     i = rk + 1 + k
     wsV.cell(i, 1, k + 1)
     for col, sc in src_cols.items():
         c = wsV.cell(i, col, f"=INDEX(${sc}${first}:${sc}${last},MATCH($A{i},$W${first}:$W${last},0))")
-        c.number_format = {4: NUM0, 5: "0.00", 6: PCT, 13: PCT, 16: PCT, 14: USD, 15: USD, 17: "0.00", 18: NUM0}.get(col, USD if 7 <= col <= 11 else "General")
+        c.number_format = {4: NUM0, 5: "0.00", 6: PCT, 13: PCT, 16: PCT, 14: USD, 15: USD, 17: "0.00", 18: NUM0, 19: USD, 20: USD2, 21: USD2}.get(col, USD if 7 <= col <= 11 else "General")
 rk_end = rk + N_ACT
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
 wsV.conditional_formatting.add(f"I{rk+1}:I{rk_end}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
@@ -842,6 +858,13 @@ KP = [
     ("Team contribution margin in window", "=out_ActTeamCM", USD),
     ("Contribution margin % in window (qualified only billed)", "=out_ActTeamPctQ", PCT),
     ("Top 3 by CM", '=out_Top1&", "&out_Top2&", "&out_Top3', "General"),
+    ("SEC", "Fully loaded: charging email & GTM cost per opportunity"),
+    ("Email & GTM cost per opportunity (input)", "=in_OppCost", USD),
+    ("Setter cost per booked meeting or transfer (window)", "=out_ActCostPerMtg", USD2),
+    ("Fully loaded cost per billable outcome (window, qualified billed)", "=out_ActFullCostPerQ", USD2),
+    ("Fully loaded margin in window (qualified billed)", "=out_ActFullCM", USD),
+    ("Team CM / month, current team, fully loaded (qualified billed)", "=out_TeamCM_Now-INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)*in_OppCost", USD),
+    ("Team CM / month, current team, fully loaded (all billed)", "=out_TeamCMAll_Now-INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)*in_OppCost", USD),
     ("SEC", "Incrementality: counting only meetings email would not have booked"),
     ("Share of setter meetings that are net new", "=in_Incremental", PCT),
     ("Team CM / month, current team, incremental only (qualified billed)", "=out_TeamRev_Now*in_Incremental-out_TeamCost_Now", USD),
@@ -871,7 +894,7 @@ for item in KP:
 r += 1
 section(wsM, r, "Inputs that are GUESSED (confirm these first)", 2); r += 1
 for g in ["Ramp: month 1 = 50%, month 2 = 80%", "Expected tenure: 6 months",
-          "Management overhead $350/seat; Trainual $8; phone numbers $10",
+          "Management: $5K of Amir + $8K manager per 30 setters; Trainual $8; phone numbers $10",
           "PH part-time and LATAM junior base pay; pay type of the Nov 13 class (set to LATAM full-time)",
           "Purchased cold data: 2 booked meetings a day per setter, 450 numbers per booked meeting"]:
     wsM.cell(r, 1, "• " + g); r += 1

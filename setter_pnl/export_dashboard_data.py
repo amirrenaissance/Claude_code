@@ -78,6 +78,12 @@ k = {
     "rev_outcome_all": inp["Revenue per booked meeting incl. its transfers, every booking billed"],
     "pos_week": inp["Funding positive replies with a phone entering the dialer per week"],
     "be_cold_q": S["Break-even cold booked meetings per setter-day (qualified billed)"],
+    "opp_cost": S["Email & GTM cost per opportunity (input)"],
+    "cost_per_mtg": S["Setter cost per booked meeting or transfer (window)"],
+    "full_cost_per_q": S["Fully loaded cost per billable outcome (window, qualified billed)"],
+    "win_cm_full": S["Fully loaded margin in window (qualified billed)"],
+    "team_cm_full_q": S["Team CM / month, current team, fully loaded (qualified billed)"],
+    "team_cm_full_all": S["Team CM / month, current team, fully loaded (all billed)"],
     "incremental": S["Share of setter meetings that are net new"],
     "cm_incr_q": S["Team CM / month, current team, incremental only (qualified billed)"],
     "cm_incr_all": S["Team CM / month, current team, incremental only (all billed)"],
@@ -173,7 +179,8 @@ for r in range(hdr + 1, v.max_row + 1):
                  "margin_q": num(g(13), 3) if isinstance(g(13), (int, float)) else None,
                  "revenue_all": num(g(14), 0), "cm_all": num(g(15), 0),
                  "margin_all": num(g(16), 3) if isinstance(g(16), (int, float)) else None,
-                 "booked_per_day": num(g(17)), "transfers": g(18) or 0})
+                 "booked_per_day": num(g(17)), "transfers": g(18) or 0, "cm_full": num(g(19), 0),
+                 "cost_per_mtg": num(g(20)), "full_cost_per_q": num(g(21)) if isinstance(g(21), (int, float)) else None})
 dump("setters", rows, "Actual_vs_Model tab (ranked view)")
 
 # ---- assumptions (Inputs: scalars + pay types)
