@@ -109,6 +109,7 @@ SCALARS: list[tuple] = [
     ("in_RevBookedQ", "Revenue per booked meeting incl. its transfers, qualified meetings billed", "=in_QualRate*in_RevQEff+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
     ("in_RevBookedAll", "Revenue per booked meeting incl. its transfers, every booking billed", "=in_RevQ+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "", USD2),
     ("in_CommBooked", "Commission per booked meeting incl. its transfers", "=in_QualRate*in_Commission+in_XferPerMtg*in_XferComm", "$/mtg", "CALC", "", USD2),
+    ("in_Incremental", "Share of setter meetings that are net new (email would not have booked them)", 0.63, "%", "DERIVED", "ClickHouse, Nov 10-14 positives: reached leads book 13.3% (10.0% call + 3.3% email) vs 7.0% email-only for leads setters never reached. Upper-end estimate; a holdout test would measure it", PCT),
     ("in_PosWeek", "Funding positive replies with a phone entering the dialer per week", 3700, "per week", "ACTUAL", "ClickHouse: 3,699 leads added to the positive-reply list Nov 10-14", NUM0),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
     ("in_Handled", "Live conversations handled per setter per day", 38, "convs/day", "DERIVED", "ClickHouse: 5,127 agent-handled funding calls Nov 10-18 / ~133 setter-days (19 setters x 7 weekdays)", NUM0),
@@ -537,6 +538,9 @@ name("out_TeamCMc_Delta", "Team_PnL", f"${L(2+NT)}$33")
 name("out_TeamCMAll_Now", "Team_PnL", f"${L(NT)}$38")
 name("out_TeamCMAll_Delta", "Team_PnL", f"${L(2+NT)}$38")
 name("out_TeamCMcAll_Delta", "Team_PnL", f"${L(2+NT)}$41")
+name("out_TeamRev_Now", "Team_PnL", f"${L(NT)}$18")
+name("out_TeamCost_Now", "Team_PnL", f"${L(NT)}$23")
+name("out_TeamRevAll_Now", "Team_PnL", f"${L(NT)}$37")
 widths(wsT, {"A": 58, **{L(2 + k): 14 for k in range(NT + 1)}})
 wsT.freeze_panes = "B5"
 
@@ -838,6 +842,12 @@ KP = [
     ("Team contribution margin in window", "=out_ActTeamCM", USD),
     ("Contribution margin % in window (qualified only billed)", "=out_ActTeamPctQ", PCT),
     ("Top 3 by CM", '=out_Top1&", "&out_Top2&", "&out_Top3', "General"),
+    ("SEC", "Incrementality: counting only meetings email would not have booked"),
+    ("Share of setter meetings that are net new", "=in_Incremental", PCT),
+    ("Team CM / month, current team, incremental only (qualified billed)", "=out_TeamRev_Now*in_Incremental-out_TeamCost_Now", USD),
+    ("Team CM / month, current team, incremental only (all billed)", "=out_TeamRevAll_Now*in_Incremental-out_TeamCost_Now", USD),
+    ("Break-even net-new share (qualified billed)", "=IFERROR(out_TeamCost_Now/out_TeamRev_Now,0)", PCT),
+    ("Break-even net-new share (all billed)", "=IFERROR(out_TeamCost_Now/out_TeamRevAll_Now,0)", PCT),
     ("SEC", "If every booking bills (commission still on qualified only)"),
     ("Team revenue in window (all billed)", "=out_ActTeamRevAll", USD),
     ("Team contribution margin in window (all billed)", "=out_ActTeamCMAll", USD),

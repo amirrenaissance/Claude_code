@@ -78,6 +78,11 @@ k = {
     "rev_outcome_all": inp["Revenue per booked meeting incl. its transfers, every booking billed"],
     "pos_week": inp["Funding positive replies with a phone entering the dialer per week"],
     "be_cold_q": S["Break-even cold booked meetings per setter-day (qualified billed)"],
+    "incremental": S["Share of setter meetings that are net new"],
+    "cm_incr_q": S["Team CM / month, current team, incremental only (qualified billed)"],
+    "cm_incr_all": S["Team CM / month, current team, incremental only (all billed)"],
+    "be_incr_q": S["Break-even net-new share (qualified billed)"],
+    "be_incr_all": S["Break-even net-new share (all billed)"],
     "be_cold_all": S["Break-even cold booked meetings per setter-day (every booking billed)"],
 }
 dump("kpis", [{kk: num(v) for kk, v in k.items()}], "Summary + Inputs tabs")
