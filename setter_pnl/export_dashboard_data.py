@@ -116,6 +116,13 @@ for k_, c in enumerate(range(2, 7)):
                  "pos_week": num(v(10), 0), "cm_a_q": num(v(11), 0), "cm_a_all": num(v(12), 0),
                  "cold_cost": num(v(17), 0), "cm_b_q": num(v(18), 0), "cm_b_all": num(v(19), 0)})
 dump("growth", rows, "Growth tab")
+rows = []
+for j in range(4):
+    ra, rb, rc = 22 + j, 26 + j, 30 + j
+    rows.append({"share": g_.cell(ra, 7).value, "a_today": num(g_.cell(ra, 2).value, 0), "a_50": num(g_.cell(ra, 4).value, 0),
+                 "a_100": num(g_.cell(ra, 6).value, 0), "b_50": num(g_.cell(rb, 4).value, 0), "b_100": num(g_.cell(rb, 6).value, 0),
+                 "be_cold": num(g_.cell(rc, 2).value, 2)})
+dump("xfer_sens", rows, "Growth tab › transfer-share sensitivity")
 
 # ---- supply ladder (Inputs tab ladder table)
 wi = wb["Inputs"]

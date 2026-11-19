@@ -104,7 +104,7 @@ SCALARS: list[tuple] = [
     ("SEC", "Live transfers (to GreenBridge)"),
     ("in_XferPrice", "Price per live transfer", 170, "$/transfer", "CONFIRMED", "Amir 2026-11-19: $170 per live transfer", USD),
     ("in_XferComm", "Setter commission per live transfer", 5, "$/transfer", "GUESS", "Assumed same as a qualified meeting", USD2),
-    ("in_XferShare", "Live transfers as a share of all outcomes (transfers + meetings)", 0.20, "%", "CONFIRMED", "Amir 2026-11-19: 20% transfers / 80% meetings. Transfers come on top of meetings, they don't replace them. Nov 18-19 actual: 19%", PCT),
+    ("in_XferShare", "Live transfers as a share of all outcomes (transfers + meetings)", 0.20, "%", "GUESS", "PROJECTION (Amir 2026-11-19): mix depends on partner live-transfer availability, setter skill and prospect preference. Applies to warm and cold leads. Transfers come on top of meetings. Nov 18-19 actual: 19%", PCT),
     ("in_XferPerMtg", "Live transfers per booked meeting", "=in_XferShare/(1-in_XferShare)", "per mtg", "CALC", "20/80 mix = 1 transfer for every 4 meetings", "0.00"),
     ("in_RevBookedQ", "Revenue per booked meeting incl. its transfers, qualified meetings billed", "=in_QualRate*in_RevQEff+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
     ("in_RevBookedAll", "Revenue per booked meeting incl. its transfers, every booking billed", "=in_RevQ+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "", USD2),
@@ -495,8 +495,8 @@ TL = [
     ("Cold booked meetings", "={c}16*in_ColdBookDay*in_Days", NUM0),
     ("Cold qualified meetings", "={c}28*in_QualRate", NUM0),
     ("Cold data cost", "={c}28*in_ColdNums*in_ColdPerNum", USD),
-    ("Revenue (meetings + live transfers)", "={c}14*in_RevBookedQ+{c}29*in_RevQEff", USD),
-    ("Total cost (ladder costs + extra commission + cold data)", "={c}23+{c}29*in_Commission+{c}30", USD),
+    ("Revenue (meetings + live transfers)", "=({c}14+{c}28)*in_RevBookedQ", USD),
+    ("Total cost (ladder costs + extra commission + cold data)", "={c}23+{c}28*in_CommBooked+{c}30", USD),
     ("CONTRIBUTION MARGIN (with cold data)", "={c}31-{c}32", USD),
     ("CM per setter", "=IFERROR({c}33/{c}5,0)", USD),
     ("CM %", "=IFERROR({c}33/{c}31,0)", PCT),
@@ -504,7 +504,7 @@ TL = [
     ("Revenue, ladder only (all bookings and transfers billed)", "={c}14*in_RevBookedAll", USD),
     ("CONTRIBUTION MARGIN, ladder only (all billed)", "={c}37-{c}23", USD),
     ("CM %, ladder only (all billed)", "=IFERROR({c}38/{c}37,0)", PCT),
-    ("Revenue with cold data (all bookings and transfers billed)", "={c}14*in_RevBookedAll+{c}28*in_RevQ", USD),
+    ("Revenue with cold data (all bookings and transfers billed)", "=({c}14+{c}28)*in_RevBookedAll", USD),
     ("CONTRIBUTION MARGIN with cold data (all billed)", "={c}40-{c}32", USD),
     ("CM % with cold data (all billed)", "=IFERROR({c}41/{c}40,0)", PCT),
     ("", None, None),
@@ -551,7 +551,7 @@ wsU["B5"].font = F_B; wsU["B5"].fill = FILL_KPI
 name("out_P0RunOut", "Supply", "$B$5")
 wsU["A6"] = "Current active setters"; wsU["B6"] = "=in_ActiveN"
 wsU["A7"] = "Cold data cost per cold qualified meeting"; wsU["B7"] = "=IFERROR(in_ColdNums*in_ColdPerNum/in_QualRate,0)"; wsU["B7"].number_format = USD2
-wsU["A8"] = "Margin per cold qualified meeting (rev - commission - data)"; wsU["B8"] = "=in_RevQEff-in_Commission-B7"; wsU["B8"].number_format = USD2
+wsU["A8"] = "Margin per cold booked meeting incl. its transfers (rev - commission - data)"; wsU["B8"] = "=in_RevBookedQ-in_CommBooked-in_ColdNums*in_ColdPerNum"; wsU["B8"].number_format = USD2
 header(wsU, 10, ["Setters", "Booked from P0-P4", "Qualified from P0-P4", "Cold qualified", "Cold data cost",
                  "CM: ladder only", "CM: with cold data", "CM / setter (ladder only)", "Cold data on?"])
 NS = list(range(1, 41)) + [45, 50, 60, 70, 80, 90, 100]
@@ -566,7 +566,7 @@ for i, n in enumerate(NS, start=11):
     wsU.cell(i, 5, f"={left}*in_ColdBookDay*in_Days*in_ColdNums*in_ColdPerNum").number_format = USD
     fixed = f"A{i}*(in_BlendBase+in_SeatCost+in_Fee/in_Tenure)"
     wsU.cell(i, 6, f"=B{i}*(in_RevBookedQ-in_CommBooked)-{fixed}").number_format = USD
-    wsU.cell(i, 7, f"=F{i}+D{i}*(in_RevQEff-in_Commission)-E{i}").number_format = USD
+    wsU.cell(i, 7, f"=F{i}+D{i}/in_QualRate*(in_RevBookedQ-in_CommBooked)-E{i}").number_format = USD
     wsU.cell(i, 8, f"=F{i}/A{i}").number_format = USD
     wsU.cell(i, 9, f'=IF(E{i}>0,"COLD DATA ON","P0-P4 only")')
 end = 10 + len(NS)
@@ -598,15 +598,15 @@ GL = [
     ("Team contribution margin, every booking billed", "={c}5*(SUM(Lad_Avail)/{c}6*(in_RevBookedAll-in_CommBooked)-" + FIX + ")", USD),
     ("PATH B. KEEP TODAY'S REPLIES, BUY COLD DATA FOR THE REST", None, None),
     ("Break-even cold booked meetings per setter-day, qualified billed",
-     "=IFERROR(" + FIX + "/(in_Days*(in_QualRate*(in_RevQEff-in_Commission)-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
+     "=IFERROR(" + FIX + "/(in_Days*(in_RevBookedQ-in_CommBooked-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
     ("Break-even cold booked meetings per setter-day, every booking billed",
-     "=IFERROR(" + FIX + "/(in_Days*(in_RevQ-in_QualRate*in_Commission-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
+     "=IFERROR(" + FIX + "/(in_Days*(in_RevBookedAll-in_CommBooked-in_ColdNums*in_ColdPerNum)),0)", "0.00"),
     ("Cold numbers to buy per month (at the assumed cold booking rate)", "={c}7*in_ColdBookDay*in_Days*in_ColdNums", NUM0),
     ("Cold data cost per month", "={c}16*in_ColdPerNum", USD),
     ("Team contribution margin, qualified billed (cold at assumed rate)",
-     "=__LB__*(in_RevBookedQ-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_QualRate*(in_RevQEff-in_Commission)-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
+     "=__LB__*(in_RevBookedQ-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_RevBookedQ-in_CommBooked-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
     ("Team contribution margin, every booking billed (cold at assumed rate)",
-     "=__LB__*(in_RevBookedAll-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_RevQ-in_QualRate*in_Commission-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
+     "=__LB__*(in_RevBookedAll-in_CommBooked)+{c}7*in_ColdBookDay*in_Days*(in_RevBookedAll-in_CommBooked-in_ColdNums*in_ColdPerNum)-{c}5*" + FIX, USD),
 ]
 for i, (lab, f, fmt) in enumerate(GL, start=5):
     wsG.cell(i, 1, lab)
@@ -624,6 +624,34 @@ for rr in (11, 12, 18, 19):
     wsG.conditional_formatting.add(f"B{rr}:F{rr}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
     wsG.conditional_formatting.add(f"B{rr}:F{rr}", CellIsRule(operator="greaterThan", formula=["0"], fill=PatternFill("solid", fgColor="C6EFCE")))
 name("out_BEColdQ", "Growth", "$B$14"); name("out_BEColdAll", "Growth", "$B$15")
+# transfer-share sensitivity (qualified meetings billed)
+r0 = 22
+wsG.cell(r0 - 1, 1, "IF THE TRANSFER SHARE DIFFERS FROM THE PROJECTION (qualified meetings billed; transfers on warm and cold leads)").font = F_B
+for k in range(1, 8): wsG.cell(r0 - 1, k).fill = FILL_SEC
+wsG.cell(r0 - 1, 7, "Transfer share").font = F_B
+XS = [0.0, 0.1, 0.2, 0.3]
+def m_s(cell):  # margin per booked meeting incl. transfers at share in `cell`
+    xpm = f"({cell}/(1-{cell}))"
+    return f"(in_QualRate*(in_RevQEff-in_Commission)+{xpm}*(in_XferPrice-in_XferComm))"
+for j, xs in enumerate(XS):
+    ra = r0 + j; rb = r0 + len(XS) + j
+    for rr_, lab in ((ra, "Path A: team margin at {:.0%} transfers"), (rb, "Path B (cold at assumed rate): team margin at {:.0%} transfers")):
+        wsG.cell(rr_, 1, lab.format(xs))
+        c = wsG.cell(rr_, 7, xs); c.font = F_IN; c.number_format = "0%"
+        for k in range(5):
+            col = L(2 + k); m = m_s(f"$G${rr_}")
+            if rr_ == ra:
+                f_ = f"={col}5*(SUM(Lad_Avail)/{col}6*{m}-" + FIX + ")"
+            else:
+                f_ = (f"=({ladder_booked(col)})*{m}+{col}7*in_ColdBookDay*in_Days*({m}-in_ColdNums*in_ColdPerNum)-{col}5*" + FIX)
+            wsG.cell(rr_, 2 + k, f_).number_format = USD
+    rc = r0 + 2 * len(XS) + j
+    wsG.cell(rc, 1, f"Break-even cold booked meetings per setter-day at {xs:.0%} transfers")
+    c = wsG.cell(rc, 7, xs); c.font = F_IN; c.number_format = "0%"
+    wsG.cell(rc, 2, "=IFERROR(" + FIX + "/(in_Days*(" + m_s(f"$G${rc}") + "-in_ColdNums*in_ColdPerNum)),0)").number_format = "0.00"
+end_ = r0 + 3 * len(XS) - 1
+wsG.conditional_formatting.add(f"B{r0}:F{r0 + 2*len(XS) - 1}", CellIsRule(operator="lessThan", formula=["0"], fill=PatternFill("solid", fgColor="F8CBAD")))
+wsG.column_dimensions["G"].width = 14
 widths(wsG, {"A": 66, "B": 18, "C": 14, "D": 14, "E": 14, "F": 14})
 
 # ============================================================================ SENSITIVITY
