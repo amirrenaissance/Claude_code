@@ -80,6 +80,15 @@ k = {
     "be_cold_q": S["Break-even cold booked meetings per setter-day (qualified billed)"],
     "opp_cost": S["Email cost per positive reply"],
     "cost_per_pos": S["Email cost per positive reply"],
+    "outcomes_month": S["Booked meetings + transfers per month, current team (model)"],
+    "setter_cost_outcome": S["Setter cost per booked meeting or transfer (model)"],
+    "setter_cost_outcome2": S["Setter cost per booked meeting or transfer (model)"],
+    "email_cost_outcome_full": S["Email cost per setter booked meeting or transfer (full charge)"],
+    "email_cost_outcome_shared": S["Email cost per setter booked meeting or transfer (shared charge)"],
+    "true_cost_full": S["True cost per booked meeting or transfer: setter + email (full charge)"],
+    "true_cost_shared": S["True cost per booked meeting or transfer: setter + email (shared charge)"],
+    "rev_outcome_q2": S["Revenue per booked meeting or transfer (qualified billed)"],
+    "rev_outcome_all2": S["Revenue per booked meeting or transfer (all billed)"],
     "cost_per_mtg": S["Setter cost per booked meeting or transfer (window)"],
     "full_cost_per_q": S["Fully loaded cost per billable outcome (window, qualified billed)"],
     "win_cm_full": S["Fully loaded margin in window (qualified billed)"],
@@ -113,7 +122,7 @@ rows = []
 for c in range(2, 8):
     v = lambda r: sp.cell(r, c).value
     rows.append({"pay_type": v(4), "revenue": num(v(10)), "base": num(v(11)), "commission": num(v(12)),
-                 "gofunnel": num(v(13)), "other_seat": num(v(14) + v(15) + v(16)), "hiring": num(v(17)),
+                 "gofunnel": num(v(13)), "other_seat": num(v(14) + v(15)), "management": num(v(16)), "hiring": num(v(17)),
                  "total_cost": num(v(18)), "cm": num(v(19)), "be_q_day": num(be.cell(8, c).value)})
 dump("unit_pnl", rows, "Setter_PnL + Breakeven tabs")
 
