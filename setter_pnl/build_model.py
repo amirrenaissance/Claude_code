@@ -88,7 +88,7 @@ SCALARS: list[tuple] = [
     ("in_Ramp3", "Ramp: month 3+ productivity (% of target)", 1.0, "%", "CONFIRMED", "Brief", PCT),
     ("in_QualStart", "Qualified-rate basis: bookings dated on/after", dt.date(2026, 11, 1), "date", "INPUT", "Nov 1 = start of the CEO 3-question booking mandate", "yyyy-mm-dd"),
     ("in_QualRate", "Qualified rate (booked -> qualified, billable)", "=IFERROR(COUNTIFS(act_q,1,act_date,\">=\"&in_QualStart)/COUNTIFS(act_date,\">=\"&in_QualStart),0)", "%", "ACTUAL", "Caller QA 'Qualified' (Nov 1-15), else Scorecard Min qualified; false bookings excluded", PCT),
-    ("in_UnqualBill", "Share of unqualified bookings that still bill", 0.0, "%", "CONFIRMED", "Brief: false/unqualified = unbillable. Set >0 to test partners paying per booking regardless", PCT),
+    ("in_UnqualBill", "Share of unqualified bookings that still bill (0 = model the qualified-only booking scenario)", 0.0, "%", "CONFIRMED", "Amir 2026-11-20: every booking bills today (~$140). The qualified-only view is the 3-question-rule scenario: setters book only qualified meetings; inbox managers still book without the questions", PCT),
     ("in_WinStart", "Actuals window start (last 60 days)", dt.date(2026, 9, 19), "date", "INPUT", "refresh_actuals.py resets this", "yyyy-mm-dd"),
     ("in_WinEnd", "Actuals window end (data through)", dt.date(2026, 11, 17), "date", "INPUT", "Scorecard 'Bookings Live' data through 2026-11-17; booking data starts 2026-10-01", "yyyy-mm-dd"),
     ("in_KPIRevPerMtg", "Cross-check only: company revenue per booked meeting", 111.69, "$/mtg", "ACTUAL", "W45 KPI pack (#leaders, 2026-11-09), all channels. Not used in formulas", USD2),
@@ -711,7 +711,7 @@ VH = ["Setter", "Pay type", "Bookings", "Qualified (billable)", "False bookings"
       "Contribution margin (actual)", "CM per selling day", "Revenue (modeled)", "Cost (modeled)",
       "Contribution margin (modeled)", "Actual - modeled", "False-booking status", "rank key", "Rank", "Paid days",
       "Revenue (all billed)", "CM (all billed)", "CM % (qualified only)", "CM % (all billed)", "Days with a booking", "Booked / day worked", "Live transfers",
-      "Fully loaded margin", "Setter cost per booked meeting", "Fully loaded cost per billable outcome"]
+      "Fully loaded margin (every booking bills)", "Setter cost per booked meeting", "True cost per booking (setter + reply)"]
 header(wsV, 3, VH)
 ACTIVE_RR = [2 + k for k, x in enumerate(ROSTER) if x[5] == "Y"]  # roster rows of current setters
 N_ACT = len(ACTIVE_RR)
@@ -728,9 +728,9 @@ for k, rr in enumerate(ACTIVE_RR):
         7: (f"=IF(C{i}=0,0,NETWORKDAYS(IF(Roster!$K${rr}<>\"\",MAX(Roster!$K${rr},in_WinStart),"
             f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
         25: f"=SUMIFS(act_rev_all,act_setter,A{i},act_inwin,1)+AE{i}*in_XferPrice",
-        32: f"=O{i}-(C{i}+AE{i})*in_CostPerPos",
+        32: f"=Z{i}-(C{i}+AE{i})*in_CostPerPos",
         33: f"=IF(C{i}+AE{i}=0,0,N{i}/(C{i}+AE{i}))",
-        34: f'=IF(D{i}+AE{i}=0,"",(N{i}+(C{i}+AE{i})*in_CostPerPos)/(D{i}+AE{i}))',
+        34: f'=IF(C{i}+AE{i}=0,"",N{i}/(C{i}+AE{i})+in_CostPerPos)',
         26: f"=Y{i}-N{i}",
         27: f'=IF(I{i}=0,"",O{i}/I{i})',
         28: f'=IF(Y{i}=0,"",Z{i}/Y{i})',
@@ -753,7 +753,7 @@ for k, rr in enumerate(ACTIVE_RR):
         19: f"=Q{i}-R{i}",
         20: f"=O{i}-S{i}",
         21: f'=IF(E{i}>=3,"TERMINATE (3+)",IF(E{i}>0,"WARNING ("&E{i}&")",""))',
-        22: f"=IF(G{i}=0,-1E9,O{i})+ROW()/1E6",
+        22: f"=IF(G{i}=0,-1E9,Z{i})+ROW()/1E6",
         23: f"=RANK(V{i},$V${first}:$V${last})",
     }
     fm = {32: USD, 33: USD2, 34: USD2, 30: "0.00", 6: PCT, 8: "0.00", 25: USD, 26: USD, 27: PCT, 28: PCT, 9: USD, 10: USD, 11: USD, 12: USD, 13: USD, 14: USD, 15: USD,
@@ -796,7 +796,7 @@ name("out_ActXfers", "Actual_vs_Model", f"$AE${tr}")
 name("out_ActFullCM", "Actual_vs_Model", f"$AF${tr}")
 c = wsV.cell(tr, 33, f"=IFERROR(N{tr}/(C{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
 name("out_ActCostPerMtg", "Actual_vs_Model", f"$AG${tr}")
-c = wsV.cell(tr, 34, f"=IFERROR((N{tr}+(C{tr}+AE{tr})*in_CostPerPos)/(D{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
+c = wsV.cell(tr, 34, f"=IFERROR(N{tr}/(C{tr}+AE{tr}),0)+in_CostPerPos"); c.number_format = USD2; c.font = F_B
 name("out_ActFullCostPerQ", "Actual_vs_Model", f"$AH${tr}")
 name("in_ActQPD", "Actual_vs_Model", f"$C${tr+3}")
 
@@ -904,16 +904,17 @@ KP = [
     ("Booked meetings + transfers per month, current team (model)", "=INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)", NUM0),
     ("Setter cost per booked meeting or transfer (model)", "=IFERROR(out_TeamCost_Now/(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)),0)", USD2),
     ("True cost per booked meeting or transfer: setter + positive reply", "=IFERROR(out_TeamCost_Now/(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)),0)+in_CostPerPos", USD2),
-    ("Revenue per booked meeting or transfer (qualified billed)", "=in_RevBookedQ/(1+in_XferPerMtg)", USD2),
-    ("Revenue per booked meeting or transfer (all billed)", "=in_RevBookedAll/(1+in_XferPerMtg)", USD2),
+    ("Revenue per booked meeting or transfer (every booking bills, today)", "=in_RevBookedAll/(1+in_XferPerMtg)", USD2),
     ("Email cost of the positive replies setters book, per month", "=(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg))*in_CostPerPos", USD),
-    ("Team CM / month, current team, fully loaded (qualified billed)", "=out_TeamCM_Now-(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg))*in_CostPerPos", USD),
-    ("Team CM / month, current team, fully loaded (all billed)", "=out_TeamCMAll_Now-(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg))*in_CostPerPos", USD),
-    ("Break-even cost per positive reply (qualified billed)", "=IFERROR(out_TeamCM_Now/(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)),0)", USD2),
-    ("Break-even cost per positive reply (all billed)", "=IFERROR(out_TeamCMAll_Now/(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)),0)", USD2),
+    ("Team CM / month, current team, fully loaded (every booking bills, today)", "=out_TeamCMAll_Now-(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg))*in_CostPerPos", USD),
+    ("Break-even cost per positive reply (every booking bills, today)", "=IFERROR(out_TeamCMAll_Now/(INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)),0)", USD2),
+    ("Qualified meetings + transfers per month if setters book only qualified", "=(INDEX(Team_PnL!$B$15:$I$15,1,7)+INDEX(Team_PnL!$B$14:$I$14,1,7)*in_XferPerMtg)", NUM0),
+    ("Revenue per booking if setters book only qualified", "=IFERROR(out_TeamRev_Now/(INDEX(Team_PnL!$B$15:$I$15,1,7)+INDEX(Team_PnL!$B$14:$I$14,1,7)*in_XferPerMtg),0)", USD2),
+    ("Team CM / month, current team, fully loaded (book only qualified)", "=out_TeamCM_Now-(INDEX(Team_PnL!$B$15:$I$15,1,7)+INDEX(Team_PnL!$B$14:$I$14,1,7)*in_XferPerMtg)*in_CostPerPos", USD),
+    ("Break-even cost per positive reply (book only qualified)", "=IFERROR(out_TeamCM_Now/(INDEX(Team_PnL!$B$15:$I$15,1,7)+INDEX(Team_PnL!$B$14:$I$14,1,7)*in_XferPerMtg),0)", USD2),
     ("Setter cost per booked meeting or transfer (window)", "=out_ActCostPerMtg", USD2),
-    ("Fully loaded cost per billable outcome (window, qualified billed)", "=out_ActFullCostPerQ", USD2),
-    ("Fully loaded margin in window (qualified billed)", "=out_ActFullCM", USD),
+    ("True cost per booked meeting or transfer (window)", "=out_ActFullCostPerQ", USD2),
+    ("Fully loaded margin in window (every booking bills)", "=out_ActFullCM", USD),
     ("SEC", "Funding meetings sold, by month (Funding_Monthly tab, ClickHouse)"),
     ("October: funding meetings booked, all channels", "=out_FM_OctMtgs", NUM0),
     ("October: of which booked by setter calls", "=out_FM_OctCall", NUM0),
