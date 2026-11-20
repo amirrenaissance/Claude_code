@@ -11,7 +11,7 @@ for p in glob.glob('/home/user/Claude_code/recruiting/ph_setters/emails/batch*.j
 out=[]; seen=set()
 for r in base:
     e=em.get(r['profileUrl'])
-    if e and e not in seen:
+    if e and e not in seen and not e.endswith('@facebook.com'):
         seen.add(e); r['personal_email']=e; out.append(r)
 cols=['firstname','lastname','personal_email','jobTitle','companyName','address','headline','profileUrl']
 with open('/home/user/Claude_code/recruiting/ph_setters/ph_setter_candidates_with_emails.csv','w',newline='') as f:
