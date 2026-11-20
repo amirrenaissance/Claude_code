@@ -115,7 +115,16 @@ SCALARS: list[tuple] = [
     ("in_RevBookedQ", "Revenue per booked meeting incl. its transfers, qualified meetings billed", "=in_QualRate*in_RevQEff+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "A transfer always bills; a meeting bills only if qualified", USD2),
     ("in_RevBookedAll", "Revenue per booked meeting incl. its transfers, every booking billed", "=in_RevQ+in_XferPerMtg*in_XferPrice", "$/mtg", "CALC", "", USD2),
     ("in_CommBooked", "Commission per booked meeting incl. its transfers", "=in_QualRate*in_Commission+in_XferPerMtg*in_XferComm", "$/mtg", "CALC", "", USD2),
-    ("in_OppCost", "Email & GTM cost per opportunity (charged per booked meeting or transfer)", 80, "$/opp", "GUESS", "Ido 2026-11-19: cost per opportunity ~$70-90. Confirm definition (positive reply vs booked meeting) and the month-to-date figure", USD),
+    ("SEC", "Email engine cost (W45 KPI pack, Nov 2-8, modelled cost rev. 12 Sep)"),
+    ("in_EmSends", "Emails sent per week (cold + warm leads)", 17405345, "per week", "ACTUAL", "W45 KPI pack p1: 17.41M (prev wk 21.41M)", NUM0),
+    ("in_EmCPM", "Email all-in cost per 1,000 sends (fleet, modelled)", 9.39, "$/1,000", "ACTUAL", "W45 KPI pack p2: fleet weighted all-in CPM (Google $19.95, OTD $10.98, Outlook $6.50). Modelled, not the accounting P&L", USD2),
+    ("in_EmCostWk", "Email cost per week", "=in_EmSends*in_EmCPM/1000", "$/week", "CALC", "~$700K/month. Ido's estimate was $350-400K/month: reconcile with accounting", USD),
+    ("in_EmPos", "Positive replies per week (all workspaces)", 4730, "per week", "ACTUAL", "W45 KPI pack p1 (Jev labels, high + low intent)", NUM0),
+    ("in_CostPerPos", "Email cost per positive reply", "=in_EmCostWk/in_EmPos", "$/positive", "CALC", "The unit the setter floor is charged in the fully loaded view", USD2),
+    ("in_WPM", "Weeks per month", "=52/12", "weeks", "CALC", "", "0.00"),
+    ("in_SetterPosShare", "Share of each funding positive's cost charged to the setter floor", 1.0, "%", "INPUT", "Amir 2026-11-20: charge per positive reply. 100% = setters carry every funding positive (IM email bookings from the same replies are not credited)", PCT),
+    ("in_SetterBookShare", "Setter share of bookings made from funding positives", "=169/(169+202+21)", "%", "DERIVED", "ClickHouse Nov 10-14 cohort: setters 169, IM email 202, WhatsApp 21 bookings. Used for the 'shared' fully loaded row", PCT),
+    ("in_PosCostSetterDay", "Positive-reply cost charged per setter per calling day", "=in_PosWeek/5/in_ActiveN*in_CostPerPos*in_SetterPosShare", "$/day", "CALC", "Funding positives split evenly across active setters", USD),
     ("in_Incremental", "Share of setter meetings that are net new (email would not have booked them)", 0.63, "%", "DERIVED", "ClickHouse, Nov 10-14 positives: reached leads book 13.3% (10.0% call + 3.3% email) vs 7.0% email-only for leads setters never reached. Upper-end estimate; a holdout test would measure it", PCT),
     ("in_PosWeek", "Funding positive replies with a phone entering the dialer per week", 3700, "per week", "ACTUAL", "ClickHouse: 3,699 leads added to the positive-reply list Nov 10-14", NUM0),
     ("SEC", "Positive-reply supply ladder (P0 to P4): see ladder table below"),
@@ -722,9 +731,9 @@ for k, rr in enumerate(ACTIVE_RR):
         7: (f"=IF(C{i}=0,0,NETWORKDAYS(IF(Roster!$K${rr}<>\"\",MAX(Roster!$K${rr},in_WinStart),"
             f"_xlfn.MINIFS(act_date,act_setter,A{i},act_inwin,1)),in_WinEnd))"),
         25: f"=SUMIFS(act_rev_all,act_setter,A{i},act_inwin,1)+AE{i}*in_XferPrice",
-        32: f"=O{i}-(C{i}+AE{i})*in_OppCost",
+        32: f"=O{i}-G{i}*in_PosCostSetterDay",
         33: f"=IF(C{i}+AE{i}=0,0,N{i}/(C{i}+AE{i}))",
-        34: f'=IF(D{i}+AE{i}=0,"",(N{i}+(C{i}+AE{i})*in_OppCost)/(D{i}+AE{i}))',
+        34: f'=IF(D{i}+AE{i}=0,"",(N{i}+G{i}*in_PosCostSetterDay)/(D{i}+AE{i}))',
         26: f"=Y{i}-N{i}",
         27: f'=IF(I{i}=0,"",O{i}/I{i})',
         28: f'=IF(Y{i}=0,"",Z{i}/Y{i})',
@@ -790,7 +799,7 @@ name("out_ActXfers", "Actual_vs_Model", f"$AE${tr}")
 name("out_ActFullCM", "Actual_vs_Model", f"$AF${tr}")
 c = wsV.cell(tr, 33, f"=IFERROR(N{tr}/(C{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
 name("out_ActCostPerMtg", "Actual_vs_Model", f"$AG${tr}")
-c = wsV.cell(tr, 34, f"=IFERROR((N{tr}+(C{tr}+AE{tr})*in_OppCost)/(D{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
+c = wsV.cell(tr, 34, f"=IFERROR((N{tr}+G{tr}*in_PosCostSetterDay)/(D{tr}+AE{tr}),0)"); c.number_format = USD2; c.font = F_B
 name("out_ActFullCostPerQ", "Actual_vs_Model", f"$AH${tr}")
 name("in_ActQPD", "Actual_vs_Model", f"$C${tr+3}")
 
@@ -819,14 +828,88 @@ wsV.column_dimensions["U"].width = 18
 wsV.column_dimensions["L"].width = 16
 wsV.freeze_panes = "C4"
 
+# ============================================================================ EMAIL P&L
+wsE = wb.create_sheet("Email_PnL")
+wsE["A1"] = "Email P&L - the whole positive-reply engine, W45 (Nov 2-8 2026)"; wsE["A1"].font = F_TITLE
+wsE["A2"] = ("Source: W45 Weekly KPI Review (ClickHouse renaissance-warehouse, built 2026-11-09). Email cost is the KPI pack's "
+             "MODELLED cost (rev. 12 Sep), not the accounting P&L. Blue cells are W45 actuals: overwrite each week.")
+wsE["A2"].font = F_NOTE
+header(wsE, 4, ["Measure", "Per week (W45)", "Per month", "Note"])
+E_ROWS = [
+    ("SEC", "Volume"),
+    ("Emails sent (cold + warm)", "=in_EmSends", NUM0, "KPI pack p1"),
+    ("All-in cost per 1,000 sends", "=in_EmCPM", USD2, "Fleet weighted, modelled"),
+    ("Positive replies (all workspaces)", "=in_EmPos", NUM0, "of which funding ~3,606, Data Labs 1,118"),
+    ("Meetings booked: email channel", 437, NUM0, "IM / inbox bookings"),
+    ("Meetings booked: setter calls", 203, NUM0, "incl. Data Broker callers"),
+    ("Meetings booked: WhatsApp", 74, NUM0, ""),
+    ("Meetings booked: all channels", "=SUM({email}:{wa})", NUM0, "714 in the pack"),
+    ("SEC", "Revenue"),
+    ("Realised appointment revenue (in the pack's margin)", 79744, USD, "Renny per-appointment lines"),
+    ("Renny lines left out of the margin", 44452, USD, "BTC rev-share, GBC renewals/loop-ins, web forms"),
+    ("Total Renny revenue", "={real}+{left}", USD, ""),
+    ("Realised revenue per meeting", "=IFERROR({real}/{mtgs},0)", USD2, "$111.69 in the pack"),
+    ("SEC", "Cost"),
+    ("Email cost (sends x cost per 1,000)", "=in_EmCostWk", USD, ""),
+    ("Setter floor cost (funding, current team)", "=out_TeamCost_Now/in_WPM", USD, "From Team_PnL; Data Broker callers not included"),
+    ("Total cost", "={emcost}+{setcost}", USD, ""),
+    ("Email cost per positive reply", "=in_CostPerPos", USD2, ""),
+    ("Email cost per meeting, all channels", "=IFERROR({emcost}/{mtgs},0)", USD2, "Cost spread over every meeting the positives produce"),
+    ("SEC", "Margin"),
+    ("Margin on realised revenue", "={real}-{tot}", USD, ""),
+    ("Margin % on realised revenue", "=IFERROR({mreal}/{real},0)", PCT, ""),
+    ("Margin on total Renny revenue", "={renny}-{tot}", USD, ""),
+    ("Margin % on total Renny revenue", "=IFERROR({mrenny}/{renny},0)", PCT, ""),
+    ("Cross-check: the pack's reported margin", "=IFERROR(({real}-{mtgs}*in_EmCPM*39025/1000)/{real},0)", PCT, "-227.9% in the pack: it charges the cost per EMAIL meeting ($366 = 39,025 sends) to all 714 meetings, ~$98K/wk more than the sends cost"),
+    ("Break-even CPM on realised revenue", "=IFERROR(({real}-{setcost})/{sends}*1000,0)", USD2, "Email cost per 1,000 sends at which realised revenue covers email + setters"),
+    ("SEC", "What the setter floor adds"),
+    ("Revenue from setter-call meetings (realised $/meeting)", "={call}*{rpm}", USD, ""),
+    ("Of which net new (email would not have booked)", "={srev}*in_Incremental", USD, "Incrementality share on Inputs"),
+    ("Setter floor cost", "={setcost}", USD, ""),
+    ("Net contribution of the setter floor to the email engine", "={snew}-{scost}", USD, "Positive = the floor improves the engine's margin"),
+]
+E_KEYS = {'Emails sent (cold + warm)': 'sends', 'Meetings booked: email channel': 'email', 'Meetings booked: setter calls': 'call', 'Meetings booked: WhatsApp': 'wa', 'Meetings booked: all channels': 'mtgs', "Realised appointment revenue (in the pack's margin)": 'real', 'Renny lines left out of the margin': 'left', 'Total Renny revenue': 'renny', 'Realised revenue per meeting': 'rpm', 'Email cost (sends x cost per 1,000)': 'emcost', 'Setter floor cost (funding, current team)': 'setcost', 'Total cost': 'tot', 'Email cost per positive reply': 'cpp', 'Email cost per meeting, all channels': 'cpm_', 'Margin on realised revenue': 'mreal', 'Margin % on realised revenue': 'mrealp', 'Margin on total Renny revenue': 'mrenny', 'Margin % on total Renny revenue': 'mrennyp', "Cross-check: the pack's reported margin": 'pack', 'Break-even CPM on realised revenue': 'becpm', 'Revenue from setter-call meetings (realised $/meeting)': 'srev', 'Of which net new (email would not have booked)': 'snew', 'Setter floor cost': 'scost', 'Net contribution of the setter floor to the email engine': 'sadd'}
+ERow, rr0 = {}, 5
+for it in E_ROWS:
+    if it[0] != "SEC":
+        ERow[E_KEYS.get(it[0], "_%d" % rr0)] = f"B{rr0}"
+    rr0 += 1
+r = 5
+for it in E_ROWS:
+    if it[0] == "SEC":
+        section(wsE, r, it[1], 4); r += 1; continue
+    lab, v, fmt, note = it
+    if isinstance(v, str):
+        v = v.format(**ERow)
+    wsE.cell(r, 1, lab)
+    c = wsE.cell(r, 2, v); c.number_format = fmt; c.border = BOX
+    if not (isinstance(v, str) and v.startswith("=")):
+        c.font = F_IN
+    if fmt != PCT and E_KEYS.get(lab) not in ("rpm", "cpp", "cpm_", "becpm", None):
+        c3 = wsE.cell(r, 3, f"=B{r}*in_WPM"); c3.number_format = fmt
+    else:
+        wsE.cell(r, 3, f"=B{r}").number_format = fmt
+    wsE.cell(r, 4, note).font = F_NOTE
+    r += 1
+for nm, k in (("out_EmMarginWk", "mreal"), ("out_EmMarginPct", "mrealp"), ("out_EmMarginRennyPct", "mrennyp"), ("out_EmPackPct", "pack"),
+              ("out_EmBECPM", "becpm"), ("out_EmSetterAdds", "sadd"), ("out_EmCostPerMtg", "cpm_"), ("out_EmRevWk", "real"),
+              ("out_EmRennyWk", "renny"), ("out_EmCostWk", "emcost")):
+    name(nm, "Email_PnL", "$B$" + ERow[k][1:])
+name("out_EmMarginMo", "Email_PnL", "$C$" + ERow["mreal"][1:])
+name("out_EmSetterAddsMo", "Email_PnL", "$C$" + ERow["sadd"][1:])
+r += 1
+wsE.cell(r, 1, "Workspace cost spread (W45 pack p2): emails per meeting run from 7,786 (Data Labs) to 82,527 (Funding 5). "
+              "At $9.39 CPM that is ~$73 vs ~$775 of email per email meeting.").font = F_NOTE
+widths(wsE, {"A": 58, "B": 18, "C": 18, "D": 70})
+
 # ============================================================================ SUMMARY
 wsM = wb.create_sheet("Summary", 0)
 wsM["A1"] = "Renaissance setter floor - P&L summary"; wsM["A1"].font = Font(bold=True, size=16, color=NAVY)
 wsM["A2"] = ("All figures are live formulas. Yellow inputs on the Inputs tab are guesses: "
-             "ramp, tenure, overhead and cold-lane conversion matter most. Price = $155/meeting (Collins $260/held).")
+             "ramp, tenure, overhead and cold-lane conversion matter most. Price = $140/meeting average, $168/live transfer (Collins $260/held).")
 wsM["A2"].font = F_NOTE
 wsM["A3"] = ("Contribution margin = partner revenue minus setter-floor costs. It does NOT include the email "
-             "infrastructure cost of generating P0 replies (company KPI: ~$366 modelled cost per meeting, all channels).")
+             "cost of generating positive replies; see the fully loaded block and the Email_PnL tab (W45 KPI pack).")
 wsM["A3"].font = Font(italic=True, color="C00000", size=9)
 KP = [
     ("SEC", "Unit economics (steady state, per setter per month)"),
@@ -858,13 +941,27 @@ KP = [
     ("Team contribution margin in window", "=out_ActTeamCM", USD),
     ("Contribution margin % in window (qualified only billed)", "=out_ActTeamPctQ", PCT),
     ("Top 3 by CM", '=out_Top1&", "&out_Top2&", "&out_Top3', "General"),
-    ("SEC", "Fully loaded: charging email & GTM cost per opportunity"),
-    ("Email & GTM cost per opportunity (input)", "=in_OppCost", USD),
+    ("SEC", "Fully loaded: email cost charged per positive reply (W45 KPI pack, modelled)"),
+    ("Email cost per positive reply", "=in_CostPerPos", USD2),
+    ("Funding positive replies per month", "=in_PosWeek*in_WPM", NUM0),
+    ("Email cost of funding positives per month", "=in_PosWeek*in_WPM*in_CostPerPos", USD),
     ("Setter cost per booked meeting or transfer (window)", "=out_ActCostPerMtg", USD2),
     ("Fully loaded cost per billable outcome (window, qualified billed)", "=out_ActFullCostPerQ", USD2),
     ("Fully loaded margin in window (qualified billed)", "=out_ActFullCM", USD),
-    ("Team CM / month, current team, fully loaded (qualified billed)", "=out_TeamCM_Now-INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)*in_OppCost", USD),
-    ("Team CM / month, current team, fully loaded (all billed)", "=out_TeamCMAll_Now-INDEX(Team_PnL!$B$14:$I$14,1,7)*(1+in_XferPerMtg)*in_OppCost", USD),
+    ("Team CM / month, current team, fully loaded (qualified billed)", "=out_TeamCM_Now-in_PosWeek*in_WPM*in_CostPerPos*in_SetterPosShare", USD),
+    ("Team CM / month, current team, fully loaded (all billed)", "=out_TeamCMAll_Now-in_PosWeek*in_WPM*in_CostPerPos*in_SetterPosShare", USD),
+    ("Team CM / month, positive cost shared by bookings (qualified billed)", "=out_TeamCM_Now-in_PosWeek*in_WPM*in_CostPerPos*in_SetterBookShare", USD),
+    ("Team CM / month, positive cost shared by bookings (all billed)", "=out_TeamCMAll_Now-in_PosWeek*in_WPM*in_CostPerPos*in_SetterBookShare", USD),
+    ("Break-even email cost per positive, full charge (qualified billed)", "=IFERROR(out_TeamCM_Now/(in_PosWeek*in_WPM*in_SetterPosShare),0)", USD2),
+    ("Break-even email cost per positive, full charge (all billed)", "=IFERROR(out_TeamCMAll_Now/(in_PosWeek*in_WPM*in_SetterPosShare),0)", USD2),
+    ("SEC", "Email engine, whole funnel (Email_PnL tab, W45 week x 4.33)"),
+    ("Email cost per month (modelled)", "=out_EmCostWk*in_WPM", USD),
+    ("Email engine margin / month on realised revenue (email + setter costs)", "=out_EmMarginMo", USD),
+    ("Email engine margin % on realised revenue", "=out_EmMarginPct", PCT),
+    ("Email engine margin % incl. Renny lines left out", "=out_EmMarginRennyPct", PCT),
+    ("Margin % as reported in the KPI pack", "=out_EmPackPct", PCT),
+    ("Break-even email cost per 1,000 sends", "=out_EmBECPM", USD2),
+    ("Setter floor net contribution to the engine / month (net-new revenue - setter cost)", "=out_EmSetterAddsMo", USD),
     ("SEC", "Incrementality: counting only meetings email would not have booked"),
     ("Share of setter meetings that are net new", "=in_Incremental", PCT),
     ("Team CM / month, current team, incremental only (qualified billed)", "=out_TeamRev_Now*in_Incremental-out_TeamCost_Now", USD),
