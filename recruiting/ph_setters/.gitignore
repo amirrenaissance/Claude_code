@@ -1,0 +1,5 @@
+# Candidate PII stays out of git
+pages/
+raw/
+emails/
+*.csv
