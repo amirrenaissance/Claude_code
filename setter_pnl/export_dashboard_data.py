@@ -82,31 +82,23 @@ k = {
     "cost_per_pos": S["Email cost per positive reply"],
     "outcomes_month": S["Booked meetings + transfers per month, current team (model)"],
     "setter_cost_outcome": S["Setter cost per booked meeting or transfer (model)"],
-    "setter_cost_outcome2": S["Setter cost per booked meeting or transfer (model)"],
-    "email_cost_outcome_full": S["Email cost per setter booked meeting or transfer (full charge)"],
-    "email_cost_outcome_shared": S["Email cost per setter booked meeting or transfer (shared charge)"],
-    "true_cost_full": S["True cost per booked meeting or transfer: setter + email (full charge)"],
-    "true_cost_shared": S["True cost per booked meeting or transfer: setter + email (shared charge)"],
+    "true_cost": S["True cost per booked meeting or transfer: setter + positive reply"],
     "rev_outcome_q2": S["Revenue per booked meeting or transfer (qualified billed)"],
     "rev_outcome_all2": S["Revenue per booked meeting or transfer (all billed)"],
+    "pos_cost_booked": S["Email cost of the positive replies setters book, per month"],
+    "be_cpp_q": S["Break-even cost per positive reply (qualified billed)"],
+    "be_cpp_all": S["Break-even cost per positive reply (all billed)"],
+    "fm_oct_mtgs": S["October: funding meetings booked, all channels"],
+    "fm_oct_call": S["October: of which booked by setter calls"],
+    "fm_oct_rev": S["October: Renny revenue (all funding partner lines)"],
+    "fm_oct_rpm": S["October: revenue per booked funding meeting"],
+    "fm_nov_mtgs": S["November to date: funding meetings booked, all channels"],
+    "fm_nov_rev": S["November to date: Renny revenue"],
     "cost_per_mtg": S["Setter cost per booked meeting or transfer (window)"],
     "full_cost_per_q": S["Fully loaded cost per billable outcome (window, qualified billed)"],
     "win_cm_full": S["Fully loaded margin in window (qualified billed)"],
     "team_cm_full_q": S["Team CM / month, current team, fully loaded (qualified billed)"],
     "team_cm_full_all": S["Team CM / month, current team, fully loaded (all billed)"],
-    "pos_month": S["Funding positive replies per month"],
-    "pos_cost_month": S["Email cost of funding positives per month"],
-    "team_cm_shared_q": S["Team CM / month, positive cost shared by bookings (qualified billed)"],
-    "team_cm_shared_all": S["Team CM / month, positive cost shared by bookings (all billed)"],
-    "be_cpp_q": S["Break-even email cost per positive, full charge (qualified billed)"],
-    "be_cpp_all": S["Break-even email cost per positive, full charge (all billed)"],
-    "em_cost_month": S["Email cost per month (modelled)"],
-    "em_margin_month": S["Email engine margin / month on realised revenue (email + setter costs)"],
-    "em_margin_pct": S["Email engine margin % on realised revenue"],
-    "em_margin_renny_pct": S["Email engine margin % incl. Renny lines left out"],
-    "em_pack_pct": S["Margin % as reported in the KPI pack"],
-    "em_be_cpm": S["Break-even email cost per 1,000 sends"],
-    "em_setter_adds": S["Setter floor net contribution to the engine / month (net-new revenue - setter cost)"],
     "incremental": S["Share of setter meetings that are net new"],
     "cm_incr_q": S["Team CM / month, current team, incremental only (qualified billed)"],
     "cm_incr_all": S["Team CM / month, current team, incremental only (all billed)"],
@@ -115,6 +107,15 @@ k = {
     "be_cold_all": S["Break-even cold booked meetings per setter-day (every booking billed)"],
 }
 dump("kpis", [{kk: num(v) for kk, v in k.items()}], "Summary + Inputs tabs")
+
+# ---- funding meetings sold by month (Funding_Monthly tab)
+fmw = wb["Funding_Monthly"]
+rows = []
+for c, lab in ((2, "Sep 2026"), (3, "Oct 2026"), (4, "Nov 1-18")):
+    v = lambda r: fmw.cell(r, c).value
+    rows.append({"month": lab, "email": num(v(5), 0), "call": num(v(6), 0), "other": num(v(7), 0), "total": num(v(8), 0),
+                 "setter_share": num(v(9), 3), "revenue": num(v(10), 0), "rev_per_mtg": num(v(11)), "sends": num(v(13), 0)})
+dump("funding_monthly", rows, "Funding_Monthly tab (ClickHouse: booking portal + Renny ledger)")
 
 # ---- unit P&L per pay type (Setter_PnL rows 10-19, Breakeven row 8)
 sp, be = wb["Setter_PnL"], wb["Breakeven"]
